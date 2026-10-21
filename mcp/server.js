@@ -266,6 +266,8 @@ function startDemo(mode, seed) {
 
 function handleView(req, res, url) {
   const p = url.pathname;
+  // the city data the demo pages load as map/toronto.js (relative to /view/2d and /view/3d)
+  if (p === '/view/map/toronto.js' || p === '/map/toronto.js') return page(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(PAGES, 'map', 'toronto.js')));
   if (p === '/live.js') return page(res, 200, 'text/javascript', fs.readFileSync(path.join(__dirname, 'viewer', 'live.js')));
   if (p === '/view/2d' || p === '/view/3d') {
     try { return page(res, 200, 'text/html; charset=utf-8', patchPage(p === '/view/2d' ? 'index.html' : 'index-3d.html')); } catch (e) { return page(res, 500, 'text/plain', e.message); }

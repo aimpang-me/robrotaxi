@@ -5,6 +5,7 @@ WORKDIR /app
 COPY mcp/package.json mcp/package-lock.json mcp/
 RUN cd mcp && npm ci --omit=dev --no-audit --no-fund
 COPY index.html index-3d.html ./
+COPY map/toronto.js map/
 COPY mcp/ mcp/
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787 ROBRO_TRUST_PROXY=1 ROBRO_RUNS_DIR=/data/runs ROBRO_NOTES_DIR=/data/notes ROBRO_RUN_AS_UID=1000
 EXPOSE 8787
