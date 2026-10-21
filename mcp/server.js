@@ -225,7 +225,7 @@ function makeServer(base) {
 
 /* ---------------- HTTP: viewer, live stream, leaderboard, and (with --http) MCP ---------------- */
 function patchPage(file) {
-  let html = fs.readFileSync(path.join(PAGES, file), 'utf8');
+  let html = fs.readFileSync(path.join(PAGES, file), 'utf8').replace(/\r\n/g, '\n'); // a Windows checkout may have CRLF
   const rep = (a, b) => { if (!html.includes(a)) throw new Error(`${file} changed: cannot find "${a.slice(0, 40)}"`); html = html.replace(a, b); };
   rep('function step(dt) {', 'function step(dt) {\n  if (window.__robroLive) return;');
   rep('window.__robro = {', 'window.__robroLiveHooks = { main: () => MAIN, shadow: () => SHADOW, setShadow: (w) => { SHADOW = w; }, cloneWorld, nodes, edges, E, DEPOTS, recomputeTraffic, log, setAgentUI };\nwindow.__robro = {');
