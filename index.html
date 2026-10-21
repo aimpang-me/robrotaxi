@@ -262,6 +262,13 @@ main {
 .pin-label { font: 700 8.5px var(--f-num); fill: var(--paint); paint-order: stroke; stroke: var(--road); stroke-width: 3px; pointer-events: none; }
 .maptag a { color: inherit; }
 .maptag { pointer-events: auto; }
+.av-pulse { animation: avPulse .8s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+.av-cancel { animation: avCancel 1.2s ease-in forwards; transform-box: fill-box; transform-origin: center; }
+.av-happy { animation: avHappy 1.5s ease-out forwards; transform-box: fill-box; transform-origin: center; }
+@keyframes avPulse { to { transform: scale(1.14); } }
+@keyframes avCancel { to { transform: translateY(12px) scale(.65); opacity: 0; } }
+@keyframes avHappy { 30% { transform: translateY(-6px) scale(1.35); } to { transform: translateY(-18px) scale(1.2); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .av-pulse, .av-cancel, .av-happy { animation: none; } .av-cancel, .av-happy { opacity: 0; } }
 
 /* agent rail */
 .agentrail { grid-area: agent; }
@@ -1282,6 +1289,97 @@ function showHover(e) {
 
 const ROUTE_COL = { pickup: 'var(--blue)', riding: 'var(--yellow)', tocharge: 'var(--green)', reposition: 'var(--paint)', hold: 'var(--orange)' };
 const carEls = new Map();
+/* ---------------- rider faces ---------------- */
+// Stylised faces drawn once into an atlas: FACES people x 4 expressions, 8 x 8 cells of 128 px.
+// A rider's face comes from a hash of their id, so it stays the same across views and reloads.
+// Expressions follow the fare rules: calm while the fare is full (first 5 min), impatient as it
+// shrinks, angry from 10 min until they cancel at 15, happy at drop-off.
+const FACES = 16, FACE_PX = 128, EXPR = { calm: 0, impatient: 1, angry: 2, happy: 3 };
+const FULL_FARE_WAIT = 5 * 60, ANGRY_WAIT = 10 * 60;
+const faceOf = (id) => { let h = 2166136261; for (const ch of String(id)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0) % FACES; };
+const moodOf = (wait) => (wait < FULL_FARE_WAIT ? 'calm' : wait < ANGRY_WAIT ? 'impatient' : 'angry');
+const faceCell = (f, mood) => [f % 8, EXPR[mood] * 2 + Math.floor(f / 8)]; // column, row in the atlas
+function drawFace(g, cx, cy, R, f, mood) {
+  const r = mulberry(f * 97 + 3), pick = (a) => a[Math.floor(r() * a.length)];
+  const skin = pick(['#f3d2b8', '#e8b98f', '#d19a6a', '#b07444', '#8a5530', '#5f3a22']);
+  const hair = pick(['#1f1a17', '#3b2a1e', '#6b4527', '#b07a3c', '#d9b26a', '#8f8a84', '#a3392b']);
+  const style = f % 6, glasses = r() < 0.3, bg = `hsl(${Math.floor(r() * 360)},45%,78%)`;
+  const P = (x, y) => [cx + x * R, cy + y * R];
+  const ell = (x, y, rx, ry, fill) => { g.beginPath(); g.ellipse(...P(x, y), rx * R, ry * R, 0, 0, 6.2832); g.fillStyle = fill; g.fill(); };
+  g.save(); g.beginPath(); g.arc(cx, cy, R, 0, 6.2832); g.clip();
+  g.fillStyle = bg; g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+  ell(0, 1.05, 0.62, 0.38, pick(['#3d5a80', '#6d597a', '#2a9d8f', '#e76f51', '#264653', '#8d99ae'])); // shoulders
+  ell(0, 0.62, 0.15, 0.2, skin); // neck
+  if (style === 1) ell(0, -0.02, 0.6, 0.6, hair); // long hair behind the head
+  ell(-0.5, 0.08, 0.1, 0.14, skin); ell(0.5, 0.08, 0.1, 0.14, skin); // ears
+  ell(0, 0.06, 0.5, 0.58, skin); // head
+  g.fillStyle = hair;
+  if (style === 0 || style === 1) { g.beginPath(); g.ellipse(...P(0, -0.22), 0.52 * R, 0.4 * R, 0, Math.PI, 0); g.fill(); }
+  if (style === 2) for (let a = 0; a < 9; a++) { const t = Math.PI * (1.05 + a * 0.112); ell(Math.cos(t) * 0.46, -0.12 + Math.sin(t) * 0.42, 0.17, 0.17, hair); }
+  if (style === 3) { g.beginPath(); g.ellipse(...P(0, -0.22), 0.52 * R, 0.4 * R, 0, Math.PI, 0); g.fill(); ell(0, -0.66, 0.2, 0.17, hair); }
+  if (style === 5) { const cap = pick(['#e63946', '#1d3557', '#f4a261', '#2a9d8f']); g.fillStyle = cap; g.beginPath(); g.ellipse(...P(0, -0.24), 0.54 * R, 0.4 * R, 0, Math.PI, 0); g.fill(); ell(0.3, -0.24, 0.42, 0.08, cap); }
+  // style 4 is bald
+  const ink = '#2b2522'; g.strokeStyle = ink; g.fillStyle = ink; g.lineCap = 'round'; g.lineWidth = R * 0.07;
+  const line = (pts) => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(...P(x, y)) : g.moveTo(...P(x, y)))); g.stroke(); };
+  if (mood === 'happy') { for (const s of [-1, 1]) { g.beginPath(); g.arc(...P(s * 0.2, 0.04), 0.09 * R, Math.PI * 1.1, Math.PI * 1.9); g.stroke(); } }
+  else { ell(-0.2, 0.02, 0.06, 0.075, ink); ell(0.2, 0.02, 0.06, 0.075, ink); }
+  if (mood === 'impatient') { line([[-0.3, -0.13], [-0.1, -0.11]]); line([[0.1, -0.11], [0.3, -0.15]]); }
+  if (mood === 'angry') { line([[-0.32, -0.2], [-0.1, -0.1]]); line([[0.1, -0.1], [0.32, -0.2]]); ell(-0.3, 0.2, 0.1, 0.06, 'rgba(220,60,50,.45)'); ell(0.3, 0.2, 0.1, 0.06, 'rgba(220,60,50,.45)'); }
+  if (mood === 'happy') { ell(-0.3, 0.2, 0.09, 0.05, 'rgba(240,110,110,.4)'); ell(0.3, 0.2, 0.09, 0.05, 'rgba(240,110,110,.4)'); }
+  g.lineWidth = R * 0.06; g.strokeStyle = ink;
+  if (mood === 'calm') { g.beginPath(); g.arc(...P(0, 0.2), 0.16 * R, Math.PI * 0.2, Math.PI * 0.8); g.stroke(); }
+  if (mood === 'impatient') line([[-0.13, 0.33], [0.13, 0.31]]);
+  if (mood === 'angry') { g.beginPath(); g.arc(...P(0, 0.44), 0.15 * R, Math.PI * 1.2, Math.PI * 1.8); g.stroke(); }
+  if (mood === 'happy') { g.beginPath(); g.arc(...P(0, 0.22), 0.18 * R, 0, Math.PI); g.closePath(); g.fillStyle = '#7a2b2b'; g.fill(); g.stroke(); }
+  if (glasses) { g.lineWidth = R * 0.045; for (const s of [-1, 1]) { g.beginPath(); g.arc(...P(s * 0.2, 0.02), 0.13 * R, 0, 6.2832); g.stroke(); } line([[-0.07, 0.0], [0.07, 0.0]]); }
+  g.restore();
+}
+let faceAtlasCanvas = null;
+function faceAtlas() {
+  if (faceAtlasCanvas) return faceAtlasCanvas;
+  const cv = document.createElement('canvas'); cv.width = cv.height = FACE_PX * 8; const g = cv.getContext('2d');
+  for (let f = 0; f < FACES; f++) for (const mood of Object.keys(EXPR)) { const [c, rw] = faceCell(f, mood); drawFace(g, (c + 0.5) * FACE_PX, (rw + 0.5) * FACE_PX, FACE_PX * 0.46, f, mood); }
+  return (faceAtlasCanvas = cv);
+}
+/* ---------------- rider avatars (2D) ---------------- */
+// Waiting riders show their face over the pickup pin inside a patience ring that fills toward the
+// 15 min cancel (green while the fare is full, orange, then red and pulsing); a rider aboard shows
+// on their car; giving up and drop-off animate. Reads only r.id, r.from, r.t0, r.status, r.car.
+const faceURLs = new Map();
+function faceURL(f, mood) {
+  const k = f + mood; if (faceURLs.has(k)) return faceURLs.get(k);
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64; drawFace(cv.getContext('2d'), 32, 32, 32, f, mood);
+  const u = cv.toDataURL(); faceURLs.set(k, u); return u;
+}
+const MOOD_COL = { calm: 'var(--green)', impatient: 'var(--orange)', angry: 'var(--red)' };
+const avSeen = new Map();
+function avatar(parent, x, y, f, mood, frac, ring, cls) {
+  const k = (tagSize / 11 * 1.3 * UI).toFixed(4), outer = el('g', { transform: `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})` }, parent), g = el('g', cls ? { class: cls } : {}, outer);
+  el('circle', { r: 9, fill: 'var(--road)', stroke: 'var(--line)', 'stroke-width': 2.4 }, g);
+  el('circle', { r: 9, fill: 'none', stroke: ring, 'stroke-width': 2.4, pathLength: 100, 'stroke-dasharray': `${(frac * 100).toFixed(1)} 100`, transform: 'rotate(-90)' }, g);
+  el('image', { href: faceURL(f, mood), x: -7.4, y: -7.4, width: 14.8, height: 14.8, 'clip-path': 'url(#avClip)' }, g);
+  return outer;
+}
+function renderAvatars() {
+  const g = $('gAv'), fx = $('gAvFx'); g.replaceChildren();
+  const live = new Map(), stack = new Map(), u = tagSize / 11 * UI; // screen pixels in map units
+  for (const r of S.reqs) {
+    const f = faceOf(r.id);
+    if (r.status === 'waiting' || r.status === 'assigned') {
+      const wait = Math.max(0, S.t - r.t0), mood = moodOf(wait), N = nodes[r.from], k = stack.get(r.from) || 0, x = N.x + (12 + k * 26) * u, y = N.y - 14 * u - 26 * u; stack.set(r.from, k + 1); // riders at one spot line up
+      avatar(g, x, y, f, mood, Math.min(1, wait / CANCEL_AFTER), MOOD_COL[mood], mood === 'angry' ? 'av-pulse' : '');
+      live.set(r.id, { x, y, f, st: 'wait' });
+    } else if (r.status === 'riding' && r.car && r.car.sx != null) live.set(r.id, { x: r.car.sx - 16 * u, y: r.car.sy - 16 * u, f, st: 'ride' });
+  }
+  const gone = [...avSeen].filter(([id]) => !live.has(id)).map(([, s]) => s);
+  if (gone.length <= 6) for (const s of gone) { // more at once is a world reset
+    const a = s.st === 'wait' ? avatar(fx, s.x, s.y, s.f, 'angry', 1, '#8a877f', 'av-cancel') : avatar(fx, s.x, s.y, s.f, 'happy', 1, 'var(--green)', 'av-happy');
+    setTimeout(() => a.remove(), 1600);
+  }
+  avSeen.clear(); for (const [id, s] of live) avSeen.set(id, s);
+}
+{ const d = el('defs', {}, $('map')), cp = el('clipPath', { id: 'avClip' }, d); el('circle', { r: 7.4 }, cp);
+  $('gCars').after(el('g', { id: 'gAv' }), el('g', { id: 'gAvFx', 'pointer-events': 'none' })); $('gAv').setAttribute('pointer-events', 'none'); }
 function buildCars() {
   const g = $('gCars'), rg = $('gRoutes');
   for (const c of S.cars) {
@@ -1295,8 +1393,11 @@ function buildCars() {
     el('rect', { class: 'car-glass', x: 2.5, y: -4.2, width: 4, height: 8.4, rx: 1 }, body);
     const lamp = el('rect', { x: -6.5, y: -2.5, width: 5, height: 5, rx: 1, fill: 'var(--paint-2)' }, body);
     const num = el('text', { class: 'car-num', x: 0, y: -14, 'text-anchor': 'middle' }, grp); num.textContent = c.num;
+    const face = el('g', { visibility: 'hidden', transform: 'translate(-16 -16)', 'pointer-events': 'none' }, grp); // rider aboard
+    el('circle', { r: 9, fill: 'var(--road)', stroke: 'var(--yellow)', 'stroke-width': 2.4 }, face);
+    const faceImg = el('image', { x: -7.4, y: -7.4, width: 14.8, height: 14.8, 'clip-path': 'url(#avClip)' }, face);
     grp.addEventListener('click', (ev) => { ev.stopPropagation(); select(c); });
-    carEls.set(c, { grp, body, ring, lamp, route, under, num, ver: -1, len: 0 });
+    carEls.set(c, { grp, body, ring, lamp, route, under, num, face, faceImg, faceId: null, ver: -1, len: 0 });
   }
 }
 const LAMP = { idle: 'var(--paint-2)', pickup: 'var(--blue)', riding: 'var(--yellow)', tocharge: 'var(--green)', charging: 'var(--green)', reposition: 'var(--paint)', hold: 'var(--orange)', stranded: 'var(--red)' };
@@ -1334,6 +1435,10 @@ function renderMap(now) {
     r.lamp.setAttribute('fill', LAMP[c.state] || 'var(--paint-2)');
     r.ring.setAttribute('visibility', S.selected === c || S.hoverCar === c ? 'visible' : 'hidden');
     r.ring.setAttribute('stroke', c.state === 'stranded' ? 'var(--red)' : 'var(--yellow)');
+    const rider = c.job && c.job.status === 'riding' ? c.job : null;
+    r.face.setAttribute('visibility', rider ? 'visible' : 'hidden');
+    if (rider) { const k = tagSize / 11 * 1.3; r.face.setAttribute('transform', `translate(${(-16 * k).toFixed(1)} ${(-16 * k).toFixed(1)}) scale(${k.toFixed(2)})`); }
+    if (rider && r.faceId !== rider.id) { r.faceId = rider.id; r.faceImg.setAttribute('href', faceURL(faceOf(rider.id), 'calm')); }
     // route
     const moving = c.seg < c.path.length - 1 && ROUTE_COL[c.state === 'hold' ? 'hold' : c.state];
     if (!moving) { r.route.setAttribute('points', ''); r.under.setAttribute('points', ''); continue; }
@@ -1388,6 +1493,7 @@ function renderPins() {
     const grp = el('g', { 'data-at': at, transform: `translate(${at}) scale(${UI.toFixed(4)})` }, g);
     el('use', { href: '#i-pin', x: -10, y: -19, width: 20, height: 20, style: 'color:var(--paint)' }, grp);
   }
+  renderAvatars();
 }
 function renderIncidents() {
   const g = $('gTraffic'); g.replaceChildren();
