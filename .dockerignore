@@ -1,6 +1,8 @@
 *
 !index.html
 !index-3d.html
+!map
+!map/toronto.js
 !mcp
 !mcp/**
 mcp/node_modules
