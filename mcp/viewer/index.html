@@ -36,7 +36,7 @@ a { color: var(--blue); }
   <p class="lede">Models dispatch 10 robotaxis over MCP in a race to $1,000,000. Sim time is the score.</p>
   <h2>Live games</h2>
   <div class="card"><table><thead><tr><th>Player</th><th>Model</th><th>Seed</th><th class="num">Revenue</th><th class="num">Sim time</th><th>Watch</th></tr></thead><tbody id="live"></tbody></table></div>
-  <div class="demo"><a href="/demo?mode=scripted">Watch the built-in scripted agent</a><a href="/demo?mode=executor">Watch the Executor alone</a></div>
+  <div class="demo"><a href="/demo?mode=scripted">Watch the built-in scripted agent (3D)</a><a href="/demo?mode=executor">Watch the Executor alone</a></div>
   <h2>Leaderboard</h2>
   <div class="card"><table><thead><tr><th>#</th><th>Player</th><th>Model</th><th>Seed</th><th class="num">Time to $1M</th><th class="num">Revenue</th><th class="num">Trips</th><th class="num">Decisions</th></tr></thead><tbody id="board"></tbody></table></div>
 </main>
@@ -51,7 +51,7 @@ async function load() {
     if (!active.length) { const tr = document.createElement('tr'); const c = td('No games yet. Connect a model and call new_game.', 'empty'); c.colSpan = 6; tr.append(c); live.append(tr); }
     for (const g of active) {
       const tr = document.createElement('tr');
-      const w = document.createElement('td'); w.innerHTML = `<a href="/view/2d?game=${encodeURIComponent(g.game)}">2D</a> · <a href="/view/3d?game=${encodeURIComponent(g.game)}">3D</a>`;
+      const w = document.createElement('td'); w.innerHTML = `<a href="/view/3d?game=${encodeURIComponent(g.game)}">3D</a> · <a href="/view/2d?game=${encodeURIComponent(g.game)}">2D</a>`;
       tr.append(td(g.player), td(g.model), td(g.seed + (g.ranked ? ' ranked' : '')), td(money(g.revenue), 'num'), td(g.finished ? `${(g.finishMin / 60).toFixed(2)} h ✓` : `${(g.elapsedMin / 60).toFixed(2)} h`, 'num'), w);
       live.append(tr);
     }

@@ -3,6 +3,9 @@
 (() => {
   const id = new URLSearchParams(location.search).get('game');
   const H = window.__robroLiveHooks;
+  const is3d = location.pathname.endsWith('/3d');
+  // 3D needs three.js from the CDN; if it or the page failed to start, show the same game in 2D
+  if (id && is3d && (typeof THREE === 'undefined' || !H)) { location.replace('/view/2d' + location.search); return; }
   if (!id || !H) return;
   window.__robroLive = true;
 
@@ -17,12 +20,16 @@
 #robroHud .bar{width:140px;height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}
 #robroHud .bar i{display:block;height:100%;background:#f5c518;width:0}
 #robroHud[data-done=true] .live{background:#3ecf6e}
-#robroHud .muted{opacity:.7}`;
+#robroHud .muted{opacity:.7}
+#robroHud .sw{margin-left:auto;color:#f2f0e8;opacity:.8;font-size:12px;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:1px 7px}
+#robroHud .sw:hover{opacity:1;border-color:#f5c518}
+#robroHud .top{display:flex;align-items:center;gap:6px}`;
   document.head.append(css);
   const hud = document.createElement('div'); hud.id = 'robroHud';
-  hud.innerHTML = '<span><span class="live">LIVE</span> <span class="mono time muted"></span></span><span class="who">Connecting to HQ…</span><span class="mono rev"></span><span class="bar"><i></i></span>';
+  hud.innerHTML = '<span class="top"><span class="live">LIVE</span> <span class="mono time muted"></span><a class="sw"></a></span><span class="who">Connecting to HQ…</span><span class="mono rev"></span><span class="bar"><i></i></span>';
   document.body.append(hud);
   const $h = (s) => hud.querySelector(s);
+  const sw = $h('.sw'); sw.textContent = is3d ? 'View 2D' : 'View 3D'; sw.href = (is3d ? '/view/2d' : '/view/3d') + location.search;
   const money = (x) => '$' + Math.round(x).toLocaleString('en-US');
 
   function sync(W, d) {

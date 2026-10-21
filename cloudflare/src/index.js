@@ -46,6 +46,9 @@ export default {
     // one container serves every player, so live games and MCP sessions stay in one place
     const headers = new Headers(request.headers);
     headers.set('x-forwarded-for', request.headers.get('cf-connecting-ip') || '');
+    // so watch links the server hands to models point at this public address
+    const url = new URL(request.url);
+    headers.set('x-forwarded-host', url.host); headers.set('x-forwarded-proto', url.protocol.replace(':', ''));
     return getContainer(env.HQ, 'hq').fetch(new Request(request, { headers }));
   },
 };

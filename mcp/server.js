@@ -49,7 +49,13 @@ const games = new Map();
 const liveGames = () => [...games.values()].filter((g) => !g.over()).length;
 const clean = (x, n) => String(x).replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, n);
 const watchers = new Map(); // game id -> Set of SSE responses
-const viewUrl = (g) => VIEW_PORT ? `http://localhost:${VIEW_PORT}/view/2d?game=${g.id}` : null;
+// watch links: 3D by default; base is the public address the client used (or ROBRO_PUBLIC_URL), else localhost
+const viewUrl = (g, base, view = '3d') => { const b = process.env.ROBRO_PUBLIC_URL || base || (VIEW_PORT ? `http://localhost:${VIEW_PORT}` : null); return b ? `${b.replace(/\/$/, '')}/view/${view}?game=${g.id}` : null; };
+function baseFrom(req) {
+  const host = req.headers['x-forwarded-host'] || req.headers.host; if (!host) return null;
+  const local = /^(localhost|127\.|\[::1\])/.test(host);
+  return `${req.headers['x-forwarded-proto'] || (local ? 'http' : 'https')}://${host}`;
+}
 
 /* ---------------- text formatting for models ---------------- */
 const $n = (x) => '$' + Math.round(x).toLocaleString('en-US');
@@ -112,7 +118,7 @@ async function pacedAdvance(g, seconds, stop) {
 }
 
 /* ---------------- MCP server (one per client session) ---------------- */
-function makeServer() {
+function makeServer(base) {
   const server = new McpServer({ name: 'robrotaxi', version: '0.1.0' }, {
     instructions: 'RobroTaxi: you are the fleet dispatcher. Read get_rules, then call new_game with your player name and your model name. Loop: get_state → decide (dispatch/charge/reposition/reroute/release, or act for several) → advance. Goal: $1,000,000 net revenue in the least sim time.',
   });
@@ -143,7 +149,7 @@ function makeServer() {
     games.set(g.id, g); sess.game = g;
     say(`game ${g.id}: player ${g.player}, model ${g.model}, seed ${g.seed}`);
     return [`Game ${g.id} started. Player ${g.player}, ${g.model}, connected to HQ. Seed ${g.seed}${g.ranked ? ' (ranked)' : ' (unranked)'}, about ${g.info.rph} riders/hr.`,
-      viewUrl(g) ? `Watch live: ${viewUrl(g)} (3D: ${viewUrl(g).replace('/2d', '/3d')})` : '', '', fmtState(g.state())].filter((x) => x !== '').join('\n');
+      viewUrl(g, base) ? `Watch live in 3D: ${viewUrl(g, base)} (2D: ${viewUrl(g, base, '2d')})` : '', '', fmtState(g.state())].filter((x) => x !== '').join('\n');
   });
   tool('get_state', 'Fleet, waiting riders, known hazards, depots and score. Compact text by default; format "json" for structured data.', { include_riding: z.boolean().optional(), format: z.enum(['text', 'json']).optional() },
     ({ include_riding, format }) => { const st = need().state(include_riding); return format === 'json' ? JSON.stringify(st) : fmtState(st); });
@@ -264,7 +270,7 @@ function handleView(req, res, url) {
   if (p === '/demo') {
     const g = startDemo(url.searchParams.get('mode') === 'executor' ? 'executor' : 'scripted', +(url.searchParams.get('seed') || RANKED_SEEDS[0]));
     if (!g) return page(res, 503, 'text/plain', 'HQ is full right now. Try again in a few minutes.');
-    res.writeHead(302, { location: `/view/${url.searchParams.get('view') === '3d' ? '3d' : '2d'}?game=${g.id}` }); return res.end();
+    res.writeHead(302, { location: `/view/${url.searchParams.get('view') === '2d' ? '2d' : '3d'}?game=${g.id}` }); return res.end();
   }
   if (p === '/api/games') return page(res, 200, 'application/json', JSON.stringify([...games.values()].map((g) => ({ ...g.summary(), over: g.over(), watchers: watchers.get(g.id)?.size || 0 }))));
   if (p === '/api/leaderboard') return page(res, 200, 'application/json', JSON.stringify(leaderboard()));
@@ -301,7 +307,7 @@ async function handleMcp(req, res) {
     if (transports.size >= LIM.sessions) return page(res, 503, 'application/json', JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'HQ is full right now. Try again in a few minutes.' }, id: null }));
     t = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID(), onsessioninitialized: (id) => transports.set(id, t) });
     t.onclose = () => { if (t.sessionId) transports.delete(t.sessionId); };
-    await makeServer().connect(t);
+    await makeServer(baseFrom(req)).connect(t);
   }
   t.lastActive = Date.now();
   await t.handleRequest(req, res, body);
