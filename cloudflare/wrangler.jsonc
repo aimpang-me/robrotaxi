@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "robrotaxi-hq",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "containers": [
+    {
+      "class_name": "RobroHQ",
+      "image": "../Dockerfile",
+      "image_build_context": "..",
+      "instance_type": "standard-1",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": { "bindings": [{ "name": "HQ", "class_name": "RobroHQ" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RobroHQ"] }],
+  "r2_buckets": [{ "binding": "STORE", "bucket_name": "robrotaxi-data" }],
+  "observability": { "enabled": true }
+}

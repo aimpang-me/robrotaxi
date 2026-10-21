@@ -1,0 +1,25 @@
+{
+  "name": "robrotaxi-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that lets any model dispatch the RobroTaxi fleet in a race to $1M",
+  "main": "server.js",
+  "bin": {
+    "robrotaxi-mcp": "server.js"
+  },
+  "scripts": {
+    "build": "node build-core.js",
+    "start": "node server.js --http 8787",
+    "stdio": "node server.js",
+    "bench": "node bench.js",
+    "test": "node test/play-over-mcp.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^3.25.0"
+  }
+}

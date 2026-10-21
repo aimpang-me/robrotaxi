@@ -1,0 +1,11 @@
+{
+  "name": "robrotaxi-hq-cloudflare",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "logs": "wrangler tail"
+  },
+  "dependencies": { "@cloudflare/containers": "^0.3.7" },
+  "devDependencies": { "wrangler": "^4.151.3" }
+}

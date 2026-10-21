@@ -1,0 +1,1583 @@
+<title>RobroTaxi HQ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;500;600;700;800&family=Overpass+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: ops console. Fleet rail | street map with metrics above and incident tools below | agent rail. */
+@font-face { font-family: "RT Dot"; src: local("Helvetica Neue"), local("Helvetica"), local("Arial"), local("DejaVu Sans"); unicode-range: U+00B7; }
+:root {
+  color-scheme: dark;
+  --asphalt: #2a2927;
+  --asphalt-2: #32312e;
+  --asphalt-3: #3c3b37;
+  --road: #1c1c1c;
+  --block: #393834;
+  --lot: #403f3a;
+  --line: #4a4843;
+  --paint: #edebe3;
+  --paint-2: #bdbab0;
+  --muted: #a8a59b;
+  --yellow: #f2c230;
+  --yellow-ink: #2a2103;
+  --red: #e5574a;
+  --red-text: #f48477;
+  --orange: #f08c30;
+  --green: #4fb67a;
+  --blue: #5b98e6;
+  --water: #2c393b;
+  --water-line: #3b4b4d;
+  --park: #2f3b2c;
+  --park-dot: #3b4a36;
+
+  --f-ui: "RT Dot", "Overpass", "Helvetica Neue", Arial, sans-serif;
+  --f-num: "RT Dot", "Overpass Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --t-xs: 0.6875rem;
+  --t-sm: 0.75rem;
+  --t-md: 0.8125rem;
+  --t-lg: 0.9375rem;
+  --t-xl: 1.125rem;
+  --t-2xl: 1.5rem;
+
+  --r: 4px;
+  --ease: cubic-bezier(.16, 1, .3, 1);
+}
+html, body { height: 100%; }
+body {
+  background: var(--asphalt);
+  color: var(--paint);
+  font-family: var(--f-ui);
+  font-size: var(--t-md);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+::selection { background: var(--yellow); color: var(--yellow-ink); }
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px;
+  box-sizing: border-box;
+}
+
+/* ---------- top bar ---------- */
+.top {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  min-width: 0;
+}
+.brand { display: flex; align-items: baseline; gap: 12px; margin-right: auto; min-width: 0; }
+.brand h1 { font-size: var(--t-2xl); font-weight: 800; letter-spacing: -0.01em; line-height: 1; }
+.brand h1 span { color: var(--yellow); }
+.brand p .sep { display: inline-block; width: 4px; height: 4px; background: var(--muted); border-radius: 1px; vertical-align: 2px; margin: 0 6px; }
+.brand p { margin: 0; color: var(--muted); font-size: var(--t-sm); letter-spacing: 0.02em; }
+.clock { display: flex; align-items: baseline; gap: 8px; margin-right: 12px; }
+.clock b { font-family: var(--f-num); font-size: var(--t-xl); font-weight: 600; }
+.clock small { color: var(--muted); font-size: var(--t-xs); text-transform: uppercase; letter-spacing: .08em; }
+.ctrls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 12px; border-radius: var(--r);
+  background: var(--asphalt-2); border: 1px solid var(--line);
+  font-size: var(--t-sm); font-weight: 600; letter-spacing: .02em;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.btn:hover { background: var(--asphalt-3); }
+.btn svg { width: 16px; height: 16px; flex: none; }
+.btn[aria-pressed="true"] { background: var(--paint); color: var(--road); border-color: var(--paint); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.seg button { height: 30px; padding: 0 10px; background: var(--asphalt-2); border: 0; font-family: var(--f-num); font-size: var(--t-sm); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button:hover { background: var(--asphalt-3); }
+.seg button[aria-pressed="true"] { background: var(--paint); color: var(--road); }
+.switch { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-sm); font-weight: 600; color: var(--paint-2); cursor: pointer; user-select: none; }
+.switch input { appearance: none; width: 30px; height: 16px; border-radius: 8px; background: var(--line); position: relative; margin: 0; cursor: pointer; transition: background .2s; }
+.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--paint-2); transition: transform .25s var(--ease), background .2s; }
+.switch input:checked { background: var(--orange); }
+.switch input:checked::after { transform: translateX(14px); background: var(--road); }
+.agent-pill {
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 14px 0 12px;
+  border-radius: 16px; border: 1px dashed var(--line); font-size: var(--t-sm); font-weight: 700; color: var(--paint-2);
+}
+.agent-pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.agent-pill[data-on="true"] { border: 1px solid var(--yellow); color: var(--yellow); }
+.agent-pill[data-on="true"] i { background: var(--yellow); }
+
+/* ---------- main grid ---------- */
+main {
+  display: grid;
+  grid-template-columns: 288px minmax(0, 1fr) 356px;
+  grid-template-areas: "fleet center agent";
+  gap: 12px;
+  min-height: 0;
+}
+.rail { background: var(--asphalt-2); border: 1px solid var(--line); border-radius: var(--r); min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.rail-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 12px 14px 10px; }
+.rail-h h2 { font-size: var(--t-sm); font-weight: 800; text-transform: uppercase; letter-spacing: .1em; }
+.rail-h span { color: var(--muted); font-size: var(--t-sm); }
+.stripe { height: 2px; flex: none; background: repeating-linear-gradient(90deg, var(--line) 0 14px, transparent 14px 24px); margin: 0 14px; }
+
+/* fleet */
+.fleet { grid-area: fleet; }
+.cars { list-style: none; margin: 0; padding: 6px 6px 10px; overflow: auto; min-height: 0; display: grid; gap: 2px; align-content: start; }
+.car-btn {
+  width: 100%; text-align: left; background: transparent; border: 1px solid transparent; border-radius: var(--r);
+  display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 8px; row-gap: 3px;
+  padding: 8px; align-items: center;
+}
+.car-btn:hover { background: var(--asphalt-3); }
+.car-btn[aria-pressed="true"] { border-color: var(--yellow); background: var(--asphalt-3); }
+.car-id { grid-row: 1 / 3; font-family: var(--f-num); font-weight: 600; font-size: var(--t-lg); }
+.car-state { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--t-sm); font-weight: 700; }
+.car-state i { width: 8px; height: 8px; border-radius: 2px; flex: none; background: var(--paint-2); }
+.car-state em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.car-job { grid-column: 2 / 4; font-size: var(--t-sm); color: var(--paint-2); line-height: 1.35; }
+.bat { grid-column: 3; grid-row: 1; display: flex; align-items: center; gap: 6px; }
+.bat-num { font-family: var(--f-num); font-size: var(--t-sm); font-weight: 600; min-width: 3.2ch; text-align: right; order: 2; }
+.bat-bar { width: 50px; height: 6px; background: var(--road); position: relative; overflow: hidden; border-radius: 1px; }
+.bat-bar b { position: absolute; inset: 0 auto 0 0; width: calc(var(--v) * 1%); background: var(--paint); transition: width .4s linear, background .3s; }
+.bat-bar::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1.5px), var(--asphalt-2) calc(10% - 1.5px) 10%); }
+.bat[data-lvl="mid"] .bat-bar b { background: var(--orange); }
+.bat[data-lvl="low"] .bat-bar b { background: var(--red); }
+.bat[data-lvl="low"] .bat-num { color: var(--red-text); }
+[data-s="idle"] i { background: var(--paint-2); }
+[data-s="pickup"] i { background: var(--blue); }
+[data-s="riding"] i { background: var(--yellow); }
+[data-s="tocharge"] i, [data-s="charging"] i { background: var(--green); }
+[data-s="reposition"] i { background: var(--paint); }
+[data-s="hold"] i { background: var(--orange); }
+[data-s="stranded"] i { background: var(--red); }
+[data-s="stranded"] em { color: var(--red-text); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 10px 14px 12px; border-top: 1px solid var(--line); font-size: var(--t-sm); color: var(--paint-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; }
+
+/* center */
+.center { grid-area: center; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; min-height: 0; min-width: 0; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(180px, 1.3fr); background: var(--asphalt-2); border: 1px solid var(--line); border-radius: var(--r); }
+.metric { padding: 10px 14px 11px; display: grid; gap: 2px; align-content: start; min-width: 0; }
+.metric + .metric { border-left: 1px solid var(--line); }
+.metric h3 { font-size: var(--t-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--paint-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metric .v { font-family: var(--f-num); font-size: var(--t-2xl); font-weight: 600; line-height: 1.15; }
+.metric .v small { font-size: var(--t-sm); color: var(--paint-2); font-weight: 500; margin-left: 2px; }
+.metric .cmp { font-size: var(--t-sm); color: var(--muted); min-height: 2.8em; line-height: 1.4; }
+.chart p { margin: 2px 0 0; font-size: var(--t-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chart p i { display: inline-block; width: 14px; border-top: 2px dotted var(--paint-2); vertical-align: 3px; margin-right: 4px; }
+.tune { border-top: 1px solid var(--line); padding-top: 8px; }
+.tune summary { cursor: pointer; font-size: var(--t-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--paint-2); list-style: none; display: flex; justify-content: space-between; }
+.tune summary::-webkit-details-marker { display: none; }
+.tune-sum { font-family: var(--f-num); font-size: var(--t-sm); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--paint-2); }
+.tune[open] .tune-sum { display: none; }
+.tune summary::after { content: "Show"; font-weight: 600; letter-spacing: .02em; text-transform: none; color: var(--muted); }
+.tune[open] summary::after { content: "Hide"; }
+.tune[open] summary { margin-bottom: 8px; }
+.tune summary:hover { color: var(--paint); }
+.cmp b { font-weight: 700; }
+.cmp-2 { display: block; }
+.cmp .good { color: var(--green); }
+.cmp .bad { color: var(--red-text); }
+.chart { padding: 8px 12px 6px; min-width: 0; }
+.chart h3 { font-size: var(--t-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--paint-2); }
+.chart svg { display: block; width: 100%; height: 52px; margin-top: 2px; }
+
+.mapwrap { position: relative; min-height: 0; background: var(--block); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; }
+.mapscroll { position: absolute; inset: 0; }
+.mapwrap[data-tool="crash"], .mapwrap[data-tool="jam"], .mapwrap[data-tool="ride"] { cursor: crosshair; outline: 2px solid var(--paint); outline-offset: -2px; }
+.maptag { position: absolute; left: 10px; bottom: 10px; font-size: var(--t-sm); color: var(--paint-2); background: color-mix(in srgb, var(--road) 80%, transparent); padding: 3px 8px; border-radius: 3px; pointer-events: none; }
+.toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: var(--paint); color: var(--road); font-weight: 700; font-size: var(--t-sm); padding: 6px 12px; border-radius: var(--r); box-shadow: 0 6px 18px rgb(0 0 0 / .35); pointer-events: none; transition: opacity .25s, transform .35s var(--ease); white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; }
+.toast[data-show="false"] { opacity: 0; transform: translate(-50%, -6px); }
+
+.tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.seedctl { display: inline-flex; align-items: center; gap: 6px; }
+.seedctl label { font-size: var(--t-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--paint-2); }
+.seedctl input { width: 6ch; height: 32px; padding: 0 8px; border-radius: var(--r); border: 1px solid var(--line); background: var(--road); font-family: var(--f-num); font-size: var(--t-sm); }
+.tools .hint { color: var(--paint-2); font-size: var(--t-sm); margin-left: 6px; min-width: 0; flex: 1 1 220px; }
+.tool[data-kind="crash"][aria-pressed="true"] { background: var(--red); border-color: var(--red); color: var(--road); }
+.tool[data-kind="jam"][aria-pressed="true"] { background: var(--orange); border-color: var(--orange); color: var(--road); }
+.tool[data-kind="ride"][aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: var(--road); }
+.tool[data-kind="crash"] svg { color: var(--red-text); }
+.tool[data-kind="jam"] svg { color: var(--orange); }
+.tool[data-kind="ride"] svg { color: var(--blue); }
+.tool[aria-pressed="true"] svg { color: currentColor; }
+
+/* map svg */
+.road { stroke: var(--road); stroke-linecap: square; fill: none; }
+.lane { stroke: var(--paint); stroke-opacity: .32; stroke-dasharray: 7 9; stroke-width: 1.2; fill: none; }
+.bridge-rail { stroke: var(--paint-2); stroke-opacity: .5; stroke-width: 1.4; fill: none; }
+.zebra { stroke: var(--paint); stroke-opacity: .45; stroke-width: 9; stroke-dasharray: 2 3; fill: none; }
+.lot { fill: var(--lot); }
+.park { fill: var(--park); }
+.tree { fill: var(--park-dot); }
+.water { fill: var(--water); }
+.ripple { stroke: var(--water-line); stroke-width: 1.4; fill: none; stroke-linecap: round; }
+.dlabel { fill: var(--paint); fill-opacity: .24; font: 800 15px var(--f-ui); letter-spacing: .14em; text-transform: uppercase; pointer-events: none; }
+.slabel { fill: var(--paint); fill-opacity: .7; font: 700 10.5px var(--f-ui); font-size: clamp(10.5px, calc(10px / var(--map-k, 1)), 16px); letter-spacing: .06em; text-transform: uppercase; pointer-events: none; }
+.hit { stroke: transparent; stroke-width: 24; fill: none; pointer-events: none; }
+.mapwrap[data-tool="crash"] .hit, .mapwrap[data-tool="jam"] .hit { pointer-events: stroke; }
+.hover-edge { stroke-width: 20; stroke-opacity: .45; fill: none; stroke-linecap: round; pointer-events: none; }
+.route { fill: none; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; transition: opacity .25s; }
+.route-under { fill: none; stroke: var(--road); stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; opacity: .7; }
+.dim .route:not(.sel), .dim .route-under:not(.sel) { opacity: .18; }
+.car { cursor: pointer; }
+.car-body { fill: var(--paint); stroke: var(--road); stroke-width: 1.4; }
+.car-glass { fill: var(--road); }
+.car-num { font: 600 11px var(--f-num); fill: var(--paint); paint-order: stroke; stroke: var(--road); stroke-width: 3px; pointer-events: none; }
+.car-ring { fill: none; stroke: var(--yellow); stroke-width: 2; }
+.inc-badge { stroke: var(--road); stroke-width: 2; }
+.inc-time { font: 600 9px var(--f-num); font-size: clamp(9px, calc(10px / var(--map-k, 1)), 15px); fill: var(--paint); paint-order: stroke; stroke: var(--road); stroke-width: 3px; }
+.inc.unseen .inc-badge { fill-opacity: .35; stroke: var(--paint-2); stroke-dasharray: 3 3; }
+.inc.unseen use { opacity: .6; }
+.inc.unseen .inc-time { fill: var(--paint-2); }
+.depot-pad { fill: var(--road); stroke: var(--green); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.depot-label { font: 700 8.5px var(--f-ui); font-size: clamp(8.5px, calc(9.5px / var(--map-k, 1)), 14px); fill: var(--green); letter-spacing: .06em; text-transform: uppercase; }
+.pin-label { font: 700 8.5px var(--f-num); fill: var(--paint); paint-order: stroke; stroke: var(--road); stroke-width: 3px; pointer-events: none; }
+
+/* agent rail */
+.agentrail { grid-area: agent; }
+.agent { padding: 0 14px 14px; display: grid; gap: 10px; }
+.agent-copy { margin: 0; color: var(--paint-2); font-size: var(--t-md); }
+.field { display: grid; gap: 4px; }
+.field label, .wt label { font-size: var(--t-xs); font-weight: 700; color: var(--paint-2); text-transform: uppercase; letter-spacing: .06em; }
+.field input { height: 32px; padding: 0 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--road); font-family: var(--f-num); font-size: var(--t-sm); }
+.field input:focus-visible { outline-offset: 0; }
+.weights { display: grid; gap: 8px; }
+.wt { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
+.wt output { font-family: var(--f-num); font-size: var(--t-sm); color: var(--paint); }
+.wt input { grid-column: 1 / 3; width: 100%; accent-color: var(--yellow); margin: 0; }
+.connect {
+  height: 40px; border-radius: var(--r); border: 0; background: var(--yellow); color: var(--yellow-ink);
+  font-weight: 800; font-size: var(--t-lg); letter-spacing: .01em; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: filter .15s, transform .15s var(--ease);
+}
+.connect:hover { filter: brightness(1.06); }
+.connect:active { transform: translateY(1px); }
+.connect:disabled { cursor: progress; filter: saturate(.6) brightness(.85); }
+.connect svg { width: 18px; height: 18px; }
+.agent[data-state="on"] .connect { background: transparent; color: var(--paint-2); border: 1px solid var(--line); height: 32px; font-size: var(--t-sm); }
+.agent[data-state="on"] .connect:hover { color: var(--paint); background: var(--asphalt-3); }
+.agent[data-state="on"] .off-only, .agent[data-state="connecting"] .off-only { display: none; }
+.agent:not([data-state="on"]) .on-only { display: none; }
+.agent-id { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: center; padding: 10px 12px; border-radius: var(--r); background: var(--road); }
+.agent-id svg { grid-row: 1 / 3; width: 22px; height: 22px; color: var(--yellow); }
+.agent-id b { font-size: var(--t-md); }
+.agent-id span { font-size: var(--t-sm); color: var(--paint-2); font-family: var(--f-num); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.handshake { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-family: var(--f-num); font-size: var(--t-sm); color: var(--paint-2); }
+.handshake li { display: grid; grid-template-columns: 14px 1fr; gap: 6px; animation: rise .45s var(--ease) both; }
+.handshake li::before { content: ""; width: 8px; height: 2px; margin-top: .6em; background: var(--yellow); }
+
+.feed-h { border-top: 1px solid var(--line); }
+.feed, .cars, .queue { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); padding-bottom: 28px !important; }
+.feed { list-style: none; margin: 0; padding: 0 8px 10px; overflow: auto; min-height: 0; flex: 1; display: grid; align-content: start; gap: 2px; }
+.ev { padding: 8px 8px 9px; border-radius: var(--r); display: grid; gap: 3px; animation: rise .5s var(--ease) both; }
+.ev:hover { background: var(--asphalt-3); }
+.ev-meta { display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); color: var(--muted); }
+.ev-meta time { font-family: var(--f-num); }
+.tag { font-size: var(--t-xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 1px 6px 0; border-radius: 2px; background: var(--asphalt-3); color: var(--paint-2); }
+.ev[data-src="agent"] .tag { background: var(--yellow); color: var(--yellow-ink); }
+.ev-who { font-weight: 700; color: var(--paint-2); }
+.ev[data-src="agent"] .ev-who { color: var(--yellow); }
+.ev-head { margin: 0; font-weight: 700; font-size: var(--t-md); }
+.ev-body { margin: 0; color: var(--paint-2); font-size: var(--t-sm); }
+.ev-alts { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 2px; font-size: var(--t-sm); color: var(--muted); }
+.ev-alts li { display: grid; grid-template-columns: 10px 1fr; gap: 4px; }
+.ev-alts li::before { content: ""; width: 6px; height: 1.5px; background: var(--muted); margin-top: .62em; }
+.ev[data-kind="reroute"] .ev-head::before, .ev[data-kind="incident"] .ev-head::before, .ev[data-kind="charge"] .ev-head::before, .ev[data-kind="hold"] .ev-head::before, .ev[data-kind="strand"] .ev-head::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+.ev[data-kind="reroute"] .ev-head::before { background: var(--yellow); }
+.ev[data-kind="incident"] .ev-head::before { background: var(--orange); }
+.ev[data-kind="strand"] .ev-head::before, .ev[data-kind="hold"] .ev-head::before { background: var(--red); }
+.ev[data-kind="charge"] .ev-head::before { background: var(--green); }
+
+.queue-wrap { border-top: 1px solid var(--line); max-height: 34%; display: flex; flex-direction: column; min-height: 0; }
+.queue { list-style: none; margin: 0; padding: 0 8px 10px; overflow: auto; display: grid; gap: 2px; align-content: start; }
+.rq { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 0 8px; padding: 6px 8px; border-radius: var(--r); font-size: var(--t-sm); align-items: baseline; }
+.rq b { font-family: var(--f-num); font-weight: 600; }
+.rq .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rq .where { grid-column: 2 / 4; color: var(--muted); font-size: var(--t-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rq .wait { font-family: var(--f-num); font-size: var(--t-sm); color: var(--paint-2); }
+.rq[data-mine="true"] { background: color-mix(in srgb, var(--blue) 18%, transparent); }
+.rq[data-late="true"] .wait { color: var(--red-text); }
+.empty { padding: 6px 14px 12px; color: var(--muted); font-size: var(--t-sm); margin: 0; }
+
+@keyframes rise { from { opacity: .3; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 1440px) {
+  main { grid-template-columns: 256px minmax(0, 1fr) 328px; }
+  .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(150px, 1fr); }
+  .metric { padding-inline: 12px; }
+}
+@media (max-width: 1100px) {
+  html, body { height: auto; }
+  .app { height: auto; }
+  main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "center center" "fleet agent"; }
+  .center { grid-template-rows: auto minmax(420px, 64vh) auto; }
+  .rail { max-height: none; }
+  .cars { overflow: visible; }
+  .feed { flex: none; max-height: 440px; min-height: 260px; }
+  .queue-wrap { max-height: none; }
+}
+@media (max-width: 860px) {
+  main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "center" "agent" "fleet"; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric:nth-child(3) { border-left: 0; }
+  .metric:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .chart { grid-column: 1 / 3; border-top: 1px solid var(--line); }
+  .center { grid-template-rows: auto auto auto; }
+  .mapwrap { aspect-ratio: 980 / 690; max-width: 100%; }
+  .brand p { display: none; }
+  .agent-pill { order: 2; }
+  .ctrls { order: 3; width: 100%; gap: 8px 10px; }
+  .clock { margin-right: auto; }
+  .maptag { display: none; }
+  .top { gap: 10px 14px; }
+}
+@media (max-width: 560px) {
+  .mapwrap { aspect-ratio: auto; }
+  .mapscroll { position: relative; overflow-x: auto; overscroll-behavior-x: contain; }
+  #map { position: relative; width: 720px; max-width: none; height: auto; aspect-ratio: 980 / 690; }
+}
+@media (pointer: coarse), (max-width: 560px) {
+  .btn, .seg button, .seedctl input, .field input, .agent[data-state="on"] .connect, .connect { height: 44px; }
+  .seg button { min-width: 44px; }
+  .switch { min-height: 44px; }
+  .switch input { width: 40px; height: 24px; border-radius: 12px; }
+  .switch input::after { width: 18px; height: 18px; top: 3px; left: 3px; }
+  .switch input:checked::after { transform: translateX(16px); }
+  .wt input { height: 32px; }
+  .tune summary { padding-block: 10px; }
+  .tune[open] summary { margin-bottom: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-crash" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 21.5 20h-19L12 3.5Z"/><path d="M12 10v4.4M12 17.2v.2"/></g></symbol>
+    <symbol id="i-jam" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.5h4l4.2 15.5H5.8L10 3.5Z"/><path d="M8.3 10h7.4M7.4 14.5h9.2M3.5 19.5h17"/></g></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/></g></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13.2 2.5 5 13.6h6l-1.2 7.9 8.2-11.1h-6l1.2-7.9Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7.5 4.8v14.4L19 12 7.5 4.8Z" fill="currentColor"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></symbol>
+    <symbol id="i-clear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/></g></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5l5-5"/><path d="M11 6.5l1.6-1.6a4 4 0 0 1 5.6 5.6L16.6 12"/><path d="M13 17.5l-1.6 1.6a4 4 0 0 1-5.6-5.6L7.4 12"/></g></symbol>
+    <symbol id="i-agent" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 7V4M9 12.5v1M15 12.5v1M2 12v3M22 12v3"/></g></symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Robro<span>Taxi</span></h1>
+      <p>HQ Executor <span class="sep"></span> Millbrook <span class="sep"></span> <span id="seedLabel">synthetic simulation</span></p>
+    </div>
+    <div class="ctrls">
+      <div class="clock" aria-live="off"><small>City time</small><b id="clock" class="num">08:00</b></div>
+      <button class="btn" id="pause" aria-label="Pause simulation"><svg><use href="#i-pause"/></svg><span>Pause</span></button>
+      <div class="seg" role="group" aria-label="Simulation speed">
+        <button data-speed="1" aria-pressed="false">1×</button>
+        <button data-speed="2" aria-pressed="true">2×</button>
+        <button data-speed="4" aria-pressed="false">4×</button>
+      </div>
+      <label class="switch" for="rush"><input type="checkbox" id="rush"> Rush hour</label>
+      <label class="switch" for="randomInc"><input type="checkbox" id="randomInc" checked> Seeded incidents</label>
+    </div>
+    <div class="agent-pill" id="agentPill" data-on="false"><i></i><span>Basic Executor</span></div>
+  </header>
+
+  <main>
+    <section class="rail fleet" aria-labelledby="fleetH">
+      <div class="rail-h"><h2 id="fleetH">Fleet</h2><span id="fleetSum">10 cars</span></div>
+      <div class="stripe"></div>
+      <ul class="cars" id="cars"></ul>
+      <div class="legend" aria-label="Route colours">
+        <span><i style="background:var(--blue)"></i>To pickup</span>
+        <span><i style="background:var(--yellow)"></i>Rider aboard</span>
+        <span><i style="background:var(--green)"></i>To charger</span>
+        <span><i style="background:var(--paint)"></i>Repositioning</span>
+      </div>
+    </section>
+
+    <section class="center" aria-label="City">
+      <div class="metrics" id="metrics">
+        <div class="metric"><h3>Pickup wait</h3><div class="v" id="mWait">–</div><div class="cmp" id="cWait"></div></div>
+        <div class="metric"><h3>Empty driving</h3><div class="v" id="mEmpty">–</div><div class="cmp" id="cEmpty"></div></div>
+        <div class="metric"><h3>Trips / charge</h3><div class="v" id="mTpc">–</div><div class="cmp" id="cTpc"></div></div>
+        <div class="metric"><h3>Ride delay</h3><div class="v" id="mLost">–</div><div class="cmp" id="cLost"></div></div>
+        <div class="chart"><h3>Wait trend</h3><svg id="chart" viewBox="0 0 240 52" preserveAspectRatio="none" aria-label="Average pickup wait over time"></svg><p id="chartNote">Connect your agent to compare</p></div>
+      </div>
+      <div class="mapwrap" id="mapwrap" data-tool="none">
+        <div class="mapscroll" id="mapscroll"><svg id="map" viewBox="0 0 980 690" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Map of Millbrook with robotaxis, routes and incidents">
+          <g id="gBase"></g>
+          <g id="gTraffic"></g>
+          <g id="gHover"></g>
+          <g id="gRoutes"></g>
+          <g id="gPins"></g>
+          <g id="gInc"></g>
+          <g id="gCars"></g>
+          <g id="gHit"></g>
+        </svg></div>
+        <div class="maptag">1 block ≈ 1.2 km · synthetic data</div>
+        <div class="toast" id="toast" data-show="false"></div>
+      </div>
+      <div class="tools" role="toolbar" aria-label="Incidents and rides">
+        <button class="btn tool" data-kind="crash" aria-pressed="false"><svg><use href="#i-crash"/></svg>Place crash</button>
+        <button class="btn tool" data-kind="jam" aria-pressed="false"><svg><use href="#i-jam"/></svg>Add traffic jam</button>
+        <button class="btn tool" data-kind="ride" aria-pressed="false"><svg><use href="#i-pin"/></svg>Request a ride</button>
+        <button class="btn" id="clearInc"><svg><use href="#i-clear"/></svg>Clear incidents</button>
+        <span class="seedctl"><label for="seedIn">Seed</label><input id="seedIn" inputmode="numeric" maxlength="6" autocomplete="off" aria-describedby="seedLabel"><button class="btn" id="reseed">New seed</button></span>
+        <span class="hint" id="hint">Pick a tool, then click the map. Crashes close a road; jams slow it down.</span>
+      </div>
+    </section>
+
+    <section class="rail agentrail" aria-label="Agent">
+      <div class="rail-h"><h2>Your agent</h2><span id="agentSince">not connected</span></div>
+      <div class="stripe"></div>
+      <div class="agent" id="agent" data-state="off" style="margin-top:10px">
+        <p class="agent-copy off-only">Right now the Executor is a basic dispatcher: nearest car as the crow flies, shortest road, no battery or traffic check. Connect your agent and it plans every pickup, reroute and charging stop.</p>
+        <div class="field off-only">
+          <label for="agentUrl">Agent address</label>
+          <input id="agentUrl" value="agent://alvin/robro-dispatch" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="agent-id on-only"><svg><use href="#i-agent"/></svg><b>Alvin's dispatch agent</b><span id="agentAddr">agent://alvin/robro-dispatch</span></div>
+        <ol class="handshake" id="handshake"></ol>
+        <details class="tune" id="tune" open><summary><span>Agent priorities</span><span class="tune-sum" id="tuneSum"></span></summary>
+        <div class="weights">
+          <div class="wt"><label for="wEff">Travel efficiency</label><output id="oEff" for="wEff">60</output><input type="range" id="wEff" min="0" max="100" value="60"></div>
+          <div class="wt"><label for="wBat">Battery thrift</label><output id="oBat" for="wBat">50</output><input type="range" id="wBat" min="0" max="100" value="50"></div>
+          <div class="wt"><label for="wRr">Reroute when it saves</label><output id="oRr" for="wRr">0.5 min</output><input type="range" id="wRr" min="1" max="30" value="5"></div>
+        </div>
+        </details>
+        <button class="connect" id="connect"><svg><use href="#i-link"/></svg><span>Connect agent</span></button>
+      </div>
+      <div class="rail-h feed-h"><h2>Decisions</h2><span id="feedSum">newest first</span></div>
+      <ol class="feed" id="feed" aria-live="polite"></ol>
+      <div class="queue-wrap">
+        <div class="rail-h"><h2>Ride requests</h2><span id="queueSum">0 waiting</span></div>
+        <ul class="queue" id="queue"></ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(() => {
+'use strict';
+const NS = 'http://www.w3.org/2000/svg';
+const $ = (id) => document.getElementById(id);
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------------- seeded random ---------------- */
+let seed = 20261021;
+function rnd() { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }
+const pick = (a) => a[Math.floor(rnd() * a.length)];
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function parseSeed() { const m = /^#seed(\d{1,6})$/.exec(location.hash); return m ? +m[1] : 1000 + Math.floor(Math.random() * 9000); }
+let SEED = parseSeed(), rD, rH, rC;
+function seedStreams(n) { rD = mulberry(n * 7919 + 1); rH = mulberry(n * 104729 + 7); rC = mulberry(n * 31337 + 3); }
+seedStreams(SEED);
+
+/* ---------------- constants ---------------- */
+const BASE = 1.4;          // px per sim second (1 px = 10 m, so 50 km/h)
+const CONS = 0.010;        // battery % per px (1.0 % per km)
+const RESERVE = 12;        // % the agent keeps in hand: covers a detour to another bridge
+const SIM_PER_REAL = 30;   // sim seconds per real second at 1x
+const CHARGE_RATE = 6 / 60; // % per sim second below 80%, tapering above
+const BAYS = 3;            // chargers per depot
+const chargeRate = (b) => CHARGE_RATE * (b < 80 ? 1 : b < 90 ? 0.55 : 0.3);
+const CANCEL_AFTER = 15 * 60;
+const HOLD_BASELINE = 90;
+
+/* ---------------- city ---------------- */
+const COLS = [70, 190, 310, 430, 550, 670, 790, 910];
+const ROWS = [70, 180, 290, 400, 510, 620];
+const COLN = ['Alder', 'Birch', 'Cedar', 'Dock', 'Elm', 'Ferry', 'Grove', 'Hill'];
+const ROWN = ['North Rd', 'Mill St', 'Canal St', 'River Rd', 'Market St', 'Harbor Ave'];
+const BRIDGES = [1, 4, 6];
+const nodes = [];
+for (let r = 0; r < ROWS.length; r++) for (let c = 0; c < COLS.length; c++) nodes.push({ id: r * 8 + c, r, c, x: COLS[c], y: ROWS[r] });
+const edges = [];
+const adj = nodes.map(() => []);
+const edgeMap = new Map();
+function addEdge(a, b, name) {
+  const A = nodes[a], B = nodes[b];
+  const e = { id: edges.length, a, b, len: Math.hypot(A.x - B.x, A.y - B.y), name, traffic: 1, blocked: false, rushy: false };
+  edges.push(e); adj[a].push({ to: b, e }); adj[b].push({ to: a, e });
+  edgeMap.set(a + '-' + b, e); edgeMap.set(b + '-' + a, e);
+}
+for (let r = 0; r < ROWS.length; r++) for (let c = 0; c < COLS.length - 1; c++) addEdge(r * 8 + c, r * 8 + c + 1, `${ROWN[r]} between ${COLN[c]} and ${COLN[c + 1]}`);
+for (let c = 0; c < COLS.length; c++) for (let r = 0; r < ROWS.length - 1; r++) {
+  if (r === 2 && !BRIDGES.includes(c)) continue;      // river
+  if (c === 6 && r === 3) continue;                    // Hill Park
+  addEdge(r * 8 + c, (r + 1) * 8 + c, r === 2 ? `${COLN[c]} Bridge` : `${COLN[c]} Ave between ${ROWN[r]} and ${ROWN[r + 1]}`);
+}
+const E = (a, b) => edgeMap.get(a + '-' + b);
+const corner = (n) => `${COLN[nodes[n].c]} & ${ROWN[nodes[n].r]}`;
+
+const DISTRICTS = [
+  { name: 'Old Town', node: 9, x: 190, y: 128, w: 3.2 },
+  { name: 'University', node: 14, x: 790, y: 128, w: 2.6 },
+  { name: 'Market', node: 35, x: 490, y: 458, w: 3.0 },
+  { name: 'Harbor', node: 41, x: 190, y: 568, w: 2.2 },
+  { name: 'Riverside', node: 21, x: 610, y: 238, w: 1.4 },
+];
+const DEPOTS = [
+  { name: 'Canal Depot', node: 18, px: 310, py: 290, ox: 18, oy: -48 },
+  { name: 'Harbor Depot', node: 46, px: 790, py: 620, ox: -78, oy: -48 },
+];
+const nodeWeight = nodes.map((n) => 0.4 + DISTRICTS.reduce((s, d) => s + d.w * Math.exp(-((n.x - nodes[d.node].x) ** 2 + (n.y - nodes[d.node].y) ** 2) / (2 * 140 * 140)), 0));
+edges.forEach((e) => {
+  const mx = (nodes[e.a].x + nodes[e.b].x) / 2, my = (nodes[e.a].y + nodes[e.b].y) / 2;
+  e.mx = mx; e.my = my;
+  e.rushy = DISTRICTS.some((d) => Math.hypot(mx - nodes[d.node].x, my - nodes[d.node].y) < 190);
+});
+function areaOf(n) {
+  let best = null, bd = 1e9;
+  for (const d of DISTRICTS) { const dd = Math.hypot(nodes[n].x - nodes[d.node].x, nodes[n].y - nodes[d.node].y); if (dd < bd) { bd = dd; best = d; } }
+  return best.name;
+}
+function weightedNode() {
+  const total = nodeWeight.reduce((a, b) => a + b, 0);
+  let t = rD() * total;
+  for (let i = 0; i < nodes.length; i++) { t -= nodeWeight[i]; if (t <= 0) return i; }
+  return nodes.length - 1;
+}
+
+/* ---------------- routing ---------------- */
+// the agent plans on what the fleet has seen (kBlocked/kTraffic); cars drive on the real road (blocked/traffic)
+const timeW = (e) => e.kBlocked ? Infinity : e.len / (BASE / e.kTraffic);
+function dijkstra(from, to, w) {
+  if (from === to) return { path: [from], cost: 0 };
+  const dist = new Array(nodes.length).fill(Infinity), prev = new Array(nodes.length).fill(-1), done = new Array(nodes.length).fill(false);
+  dist[from] = 0;
+  for (;;) {
+    let u = -1, best = Infinity;
+    for (let i = 0; i < nodes.length; i++) if (!done[i] && dist[i] < best) { best = dist[i]; u = i; }
+    if (u < 0) return null;
+    if (u === to) break;
+    done[u] = true;
+    for (const { to: v, e } of adj[u]) {
+      const c = w(e); if (!isFinite(c)) continue;
+      if (dist[u] + c < dist[v]) { dist[v] = dist[u] + c; prev[v] = u; }
+    }
+  }
+  const path = []; for (let v = to; v !== -1; v = prev[v]) path.unshift(v);
+  return { path, cost: dist[to] };
+}
+function pathStats(path, startOffset = 0) {
+  let px = 0, t = 0, pct = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    const e = E(path[i], path[i + 1]);
+    const L = i === 0 ? e.len - startOffset : e.len;
+    px += L; t += e.kBlocked ? Infinity : L / (BASE / e.kTraffic); pct += L * CONS * (1 + 0.25 * (e.kTraffic - 1));
+  }
+  return { px, t, pct };
+}
+const km = (px) => px / 100;
+const fmtKm = (px) => (px / 100).toFixed(1) + ' km';
+const fmtMin = (s) => (s / 60).toFixed(1) + ' min';
+
+/* ---------------- state ---------------- */
+let S = {
+  t: 8 * 3600, paused: false, speed: 2, rush: false, randomInc: true,
+  agent: false, agentSince: null, connecting: false,
+  wEff: 0.6, wBat: 0.5, rrMin: 0.5,
+  cars: [], reqs: [], incidents: [], nextReq: 101, nextInc: 1,
+  timers: { spawn: 8 * 3600 + 20, dispatch: 0, charge: 0, reroute: 0, repo: 0, sense: 0 },
+  hazards: [], hazIdx: 0, rph: 30, phase: 0,
+  periods: { exec: newPeriod(8 * 3600), agent: null },
+  waitSeries: [], connectT: null, selected: null, tool: 'none', rideDraft: null,
+};
+const MAIN = S;
+let SHADOW = null;
+function newPeriod(t) { return { start: t, pickups: 0, waitSum: 0, emptyPx: 0, totalPx: 0, trips: 0, batUsed: 0, holdS: 0, rideSum: 0, rideFree: 0, reroutes: 0, stranded: 0, cancelled: 0, recentWaits: [] }; }
+const P = () => S.agent ? S.periods.agent : S.periods.exec;
+
+const NAMES = ['Maya', 'Jonah', 'Priya', 'Leo', 'Amara', 'Sam', 'Ines', 'Theo', 'Rosa', 'Kenji', 'Nadia', 'Owen', 'Lila', 'Marco', 'Zoe', 'Ravi', 'Hana', 'Felix', 'Noor', 'Eli', 'Greta', 'Tomás', 'Aiko', 'Dev'];
+for (let i = 0; i < 10; i++) S.cars.push({ id: 'T-' + String(i + 1).padStart(2, '0'), num: String(i + 1).padStart(2, '0'), i, known: new Set(), routeVer: 0, drawT: 0, ang: 0 });
+function initCars() {
+  const usable = nodes.filter((n) => adj[n.id].length).map((n) => n.id);
+  const low = Math.floor(rC() * 10);
+  for (const c of S.cars) {
+    const n = usable[Math.floor(rC() * usable.length)];
+    Object.assign(c, { path: [n], seg: 0, prog: 0, x: nodes[n].x, y: nodes[n].y, ang: 0, battery: c.i === low ? 12 + rC() * 10 : 30 + rC() * 65, state: 'idle', job: null, next: null, depot: null, chargeTo: 0, holdUntil: 0, holdEdge: null, lastLowLog: 0 });
+    c.known.clear(); c.routeVer++;
+  }
+}
+function makeHazards() {
+  const pool = edges.filter((e) => !DEPOTS.some((d) => d.node === e.a || d.node === e.b));
+  // some days are calm, some are messy: the seed sets how busy the roads are
+  const busy = 0.6 + rH();
+  const out = []; let t = 8 * 3600 + 120 + rH() * 240;
+  while (t < 16 * 3600) {
+    const crash = rH() < 0.45;
+    out.push({ t, type: crash ? 'crash' : 'jam', edge: pool[Math.floor(rH() * pool.length)], dur: (crash ? 6 + rH() * 5 : 8 + rH() * 7) * 60 });
+    t += (4 + rH() * 8) * 60 / busy;
+  }
+  return out;
+}
+const carNode = (c) => c.prog === 0 ? c.path[c.seg] : c.path[c.seg + 1];
+const isFree = (c) => c.state === 'idle' || c.state === 'reposition';
+
+function cloneWorld(W) {
+  const reqMap = new Map();
+  const reqs = W.reqs.map((r) => { const c = { ...r, car: null, mine: false }; reqMap.set(r, c); return c; });
+  const cars = W.cars.map((c) => ({ ...c, path: [...c.path], known: new Set(c.known), job: c.job ? reqMap.get(c.job) : null, next: null }));
+  cars.forEach((c) => { if (c.job) c.job.car = c; });
+  return { ...W, shadow: true, agent: false, cars, reqs, timers: { ...W.timers }, periods: { exec: newPeriod(W.t), agent: null }, waitSeries: [], selected: null };
+}
+
+/* ---------------- feed ---------------- */
+const feedEl = $('feed');
+function clockStr(t) { const m = Math.floor(t / 60); return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+function log({ src = 'exec', kind = 'system', tag, head, body, alts }) {
+  if (S.shadow) return;
+  const li = document.createElement('li');
+  li.className = 'ev'; li.dataset.src = src; li.dataset.kind = kind;
+  const meta = document.createElement('div'); meta.className = 'ev-meta';
+  const time = document.createElement('time'); time.textContent = clockStr(S.t);
+  const tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = tag;
+  const who = document.createElement('span'); who.className = 'ev-who'; who.textContent = src === 'agent' ? 'Agent' : 'Executor';
+  meta.append(time, tg, who); li.append(meta);
+  const h = document.createElement('p'); h.className = 'ev-head'; h.textContent = head; li.append(h);
+  if (body) { const b = document.createElement('p'); b.className = 'ev-body'; b.textContent = body; li.append(b); }
+  if (alts && alts.length) { const ul = document.createElement('ul'); ul.className = 'ev-alts'; for (const a of alts) { const x = document.createElement('li'); x.textContent = a; ul.append(x); } li.append(ul); }
+  const m = /T-\d\d/.exec(head); if (m) { const car = S.cars.find((c) => c.id === m[0]); if (car) { li.addEventListener('mouseenter', () => (S.hoverCar = car)); li.addEventListener('mouseleave', () => (S.hoverCar = null)); li.addEventListener('click', () => select(S.selected === car ? null : car)); li.style.cursor = 'pointer'; } }
+  feedEl.prepend(li);
+  while (feedEl.children.length > 80) feedEl.lastChild.remove();
+}
+let toastTimer = 0;
+function toast(msg) { if (S.shadow) return; const t = $('toast'); t.textContent = msg; t.dataset.show = 'true'; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.dataset.show = 'false'), 2600); }
+
+/* ---------------- planning & movement ---------------- */
+function weightFor(car) {
+  if (S.agent) return timeW;
+  return (e) => (car.known.has(e.id) ? Infinity : e.len); // executor alone: shortest road, no live incident feed
+}
+function planFrom(car, to, w = weightFor(car)) {
+  if (car.prog > 0) {
+    const cur = car.path[car.seg], nxt = car.path[car.seg + 1];
+    const r = dijkstra(nxt, to, w); if (!r) return null;
+    return { path: [cur, ...r.path], seg: 0, prog: car.prog };
+  }
+  const r = dijkstra(car.path[car.seg], to, w); if (!r) return null;
+  return { path: r.path, seg: 0, prog: 0 };
+}
+function setRoute(car, plan) {
+  car.path = plan.path; car.seg = plan.seg; car.prog = plan.prog;
+  car.routeVer++; car.drawT = performance.now();
+}
+function remaining(car) { return pathStats(car.path.slice(car.seg), car.prog); }
+function sendTo(car, to, state) {
+  const plan = planFrom(car, to);
+  car.state = state;
+  if (!plan) { car.state = 'hold'; car.holdKind = state; car.holdTarget = to; car.holdUntil = S.t + 30; return false; }
+  setRoute(car, plan);
+  return true;
+}
+function targetOf(car) { return car.path[car.path.length - 1]; }
+
+function consume(car, px, e) {
+  const pct = px * CONS * (1 + 0.25 * (e.traffic - 1));
+  car.battery -= pct;
+  const p = P(); p.batUsed += pct; p.totalPx += px;
+  if (car.state !== 'riding') p.emptyPx += px;
+  if (car.battery <= 0) strand(car);
+}
+function strand(car) {
+  car.battery = 0;
+  const p = P(); p.stranded++;
+  const was = car.state;
+  car.state = 'stranded'; car.strandUntil = S.t + 240;
+  if (car.prog > 0) { car.path = [car.path[car.seg], car.path[car.seg + 1]]; } else { car.path = [car.path[car.seg]]; }
+  car.seg = 0; car.routeVer++;
+  if (car.next) { car.next.status = 'waiting'; car.next.car = null; car.next = null; }
+  let body = 'Tow truck dispatched. Back at the nearest depot in about 4 min.';
+  if (car.job) {
+    const r = car.job; car.job = null;
+    if (was === 'riding') { r.from = carNode(car); r.status = 'waiting'; r.car = null; r.t0 = S.t; r.rescue = true; body = `${r.name} is stuck aboard; re-queued as a rescue pickup at ${corner(r.from)}.`; }
+    else { r.status = 'waiting'; r.car = null; }
+  }
+  log({ src: 'exec', kind: 'strand', tag: 'Stranded', head: `${car.id} ran out of battery on ${E(car.path[0], car.path[1])?.name ?? corner(car.path[0])}`, body });
+}
+function moveCar(car, dt) {
+  if (car.state !== 'charging') car.plugged = false;
+  if (car.state === 'charging') {
+    if (!car.plugged) {
+      const queue = S.cars.filter((o) => o.state === 'charging' && o.depot === car.depot);
+      const inUse = queue.filter((o) => o.plugged).length;
+      const first = queue.filter((o) => !o.plugged).sort((a, b) => a.queueT - b.queueT)[0];
+      if (inUse >= BAYS || first !== car) return;
+      car.plugged = true;
+    }
+    car.battery = Math.min(100, car.battery + chargeRate(car.battery) * dt);
+    if (car.battery >= car.chargeTo) {
+      car.state = 'idle';
+      if (S.agent) log({ src: 'agent', kind: 'charge', tag: 'Charge', head: `${car.id} back in service at ${Math.round(car.battery)}%`, body: `Stopped at ${car.chargeTo}% instead of 100%: charging slows above 80%, and the car earns more on the road.` });
+    }
+    return;
+  }
+  if (car.state === 'stranded') {
+    if (S.t >= car.strandUntil) {
+      const d = DEPOTS.reduce((a, b) => Math.hypot(nodes[b.node].x - car.x, nodes[b.node].y - car.y) < Math.hypot(nodes[a.node].x - car.x, nodes[a.node].y - car.y) ? b : a);
+      car.path = [d.node]; car.seg = 0; car.prog = 0; car.state = 'charging'; car.queueT = S.t; car.chargeTo = S.agent ? 90 : 100; car.depot = d; car.battery = 2; car.routeVer++;
+    }
+    return;
+  }
+  if (car.state === 'hold') {
+    if (S.t >= car.holdUntil) {
+      if (car.holdEdge != null) car.known.add(car.holdEdge);
+      car.holdEdge = null;
+      const st = car.holdKind; car.state = st;
+      const plan = planFrom(car, car.holdTarget);
+      if (plan) { setRoute(car, plan); if (!S.agent && st !== 'idle') log({ src: 'exec', kind: 'reroute', tag: 'Detour', head: `${car.id} found its own way around`, body: `Lost ${fmtMin(HOLD_BASELINE)} waiting at the blockage before re-planning.` }); }
+      else { car.state = 'hold'; car.holdUntil = S.t + 30; }
+    } else P().holdS += dt;
+    return;
+  }
+  if (car.state === 'idle') return;
+  let rem = dt;
+  while (rem > 0 && car.seg < car.path.length - 1) {
+    const a = car.path[car.seg], b = car.path[car.seg + 1];
+    const e = E(a, b);
+    if (car.prog === 0 && e.blocked) {
+      if (S.agent) {
+        const inc = S.incidents.find((i) => i.edge === e && !i.seen); if (inc) discover(inc, car);
+        const plan = planFrom(car, targetOf(car), timeW);
+        if (plan && plan.path[1] !== b) { setRoute(car, plan); continue; }
+      }
+      car.holdKind = car.state; car.holdTarget = targetOf(car); car.holdEdge = e.id;
+      car.state = 'hold'; car.holdUntil = S.t + (S.agent ? 10 : HOLD_BASELINE);
+      if (!S.agent) log({ src: 'exec', kind: 'hold', tag: 'Blocked', head: `${car.id} stopped at the crash on ${e.name}`, body: 'The Executor has no live incident feed, so the car sat at the blockage before finding a way round.' });
+      return;
+    }
+    const v = BASE / e.traffic, left = e.len - car.prog, can = v * rem;
+    if (can >= left) { consume(car, left, e); if (car.state === 'stranded') return; car.prog = 0; car.seg++; rem -= left / v; }
+    else { consume(car, can, e); if (car.state === 'stranded') return; car.prog += can; rem = 0; }
+  }
+  if (car.seg >= car.path.length - 1) { car.path = [car.path[car.path.length - 1]]; car.seg = 0; car.prog = 0; arrive(car); }
+}
+function arrive(car) {
+  const n = car.path[0];
+  if (car.state === 'pickup' && car.job) {
+    const r = car.job; r.status = 'riding'; r.pickT = S.t;
+    const w = S.t - r.t0, p = P();
+    if (!r.rescue) {
+      p.pickups++; p.waitSum += w;
+      S.waitSeries.push({ t: S.t, w: w / 60 });
+      if (S.waitSeries.length > 400) S.waitSeries.shift();
+    }
+    const ff = dijkstra(r.from, r.to, (e) => e.len / (BASE / (S.rush && e.rushy ? 1.6 : 1)));
+    r.freeT = ff ? ff.cost : 0;
+    if (r.mine) toast(`${car.id} picked you up. Heading to ${corner(r.to)}.`);
+    sendTo(car, r.to, 'riding');
+    if (car.path.length === 1) arrive(car);
+  } else if (car.state === 'riding' && car.job) {
+    const r = car.job; r.status = 'done'; car.job = null; { const p = P(); p.trips++; p.rideSum += S.t - r.pickT; p.rideFree += r.freeT || 0; }
+    if (r.mine) toast(`You arrived at ${corner(r.to)}. Thanks for riding.`);
+    car.state = 'idle';
+    if (car.next) { const nx = car.next; car.next = null; car.job = nx; car.state = 'pickup'; sendTo(car, nx.from, 'pickup'); if (car.path.length === 1) arrive(car); return; }
+    if (!S.agent && car.battery < 15) {
+      const d = nearestDepotByDist(n); car.depot = d; car.chargeTo = 100;
+      sendTo(car, d.node, 'tocharge');
+      log({ src: 'exec', kind: 'charge', tag: 'Charge', head: `${car.id} heads to ${d.name} at ${Math.round(car.battery)}%`, body: 'Low-battery fallback: the car goes to the closest charger and fills to 100%.' });
+    }
+  } else if (car.state === 'tocharge') {
+    car.state = 'charging'; car.queueT = S.t;
+  } else if (car.state === 'reposition') {
+    car.state = 'idle';
+  }
+}
+function nearestDepotByDist(n) { return DEPOTS.reduce((a, b) => Math.hypot(nodes[b.node].x - nodes[n].x, nodes[b.node].y - nodes[n].y) < Math.hypot(nodes[a.node].x - nodes[n].x, nodes[a.node].y - nodes[n].y) ? b : a); }
+function depotLoad(d) { return S.cars.filter((c) => c.depot === d && (c.state === 'charging' || c.state === 'tocharge')).length; }
+// minutes a new arrival would wait for a free bay
+function bayWait(d) { const n = depotLoad(d); return n < BAYS ? 0 : (n - BAYS + 1) * 6; }
+function bestDepotByTime(n, battery = Infinity) {
+  let best = null;
+  for (const d of DEPOTS) {
+    const r = dijkstra(n, d.node, timeW); if (!r) continue;
+    if (pathStats(r.path).pct > battery - 0.5) continue;  // out of reach on what is left
+    const st = pathStats(r.path); const cost = st.t + bayWait(d) * 60;
+    if (!best || cost < best.cost) best = { d, cost, st };
+  }
+  return best;
+}
+
+/* ---------------- requests ---------------- */
+function spawnRequest(from, to, mine = false) {
+  if (from == null) {
+    from = weightedNode();
+    let tries = 0;
+    do { to = weightedNode(); tries++; } while ((Math.abs(nodes[to].r - nodes[from].r) + Math.abs(nodes[to].c - nodes[from].c) < 3) && tries < 30);
+  }
+  const r = { id: 'R-' + S.nextReq++, name: mine ? 'You' : NAMES[Math.floor(rD() * NAMES.length)], from, to, t0: S.t, status: 'waiting', car: null, mine, vip: mine };
+  S.reqs.push(r);
+  if (SHADOW && !S.shadow) SHADOW.reqs.push({ ...r, car: null, mine: false });
+  return r;
+}
+
+/* ---------------- dispatch ---------------- */
+function dispatch() {
+  const waiting = S.reqs.filter((r) => r.status === 'waiting').sort((a, b) => (b.rescue ? 1 : 0) - (a.rescue ? 1 : 0) || (b.vip ? 1 : 0) - (a.vip ? 1 : 0) || a.t0 - b.t0);
+  if (S.agent) agentDispatchAll(); else for (const r of waiting) execDispatch(r);
+}
+function assign(r, car) {
+  r.status = 'assigned'; r.car = car; car.job = r;
+  sendTo(car, r.from, 'pickup');
+  if (car.path.length === 1 && car.state === 'pickup') arrive(car);
+}
+function execDispatch(r) {
+  const free = S.cars.filter((c) => isFree(c) && c.battery > 0);
+  if (!free.length) return;
+  const P0 = nodes[r.from];
+  free.sort((a, b) => Math.hypot(a.x - P0.x, a.y - P0.y) - Math.hypot(b.x - P0.x, b.y - P0.y));
+  const car = free[0];
+  const trip = dijkstra(r.from, r.to, (e) => e.len);
+  const need = trip ? pathStats(trip.path).pct : 0;
+  assign(r, car);
+  const tripKm = trip ? km(pathStats(trip.path).px).toFixed(1) : '?';
+  log({ src: 'exec', kind: 'dispatch', tag: 'Dispatch', head: `${r.id} ${r.name} → ${car.id}`, body: `Nearest car, ${fmtKm(Math.hypot(car.x - P0.x, car.y - P0.y))} away as the crow flies. Trip ${tripKm} km. Battery ${Math.round(car.battery)}%${car.battery < need + 10 ? ', which may not be enough' : ''}. Traffic not checked.` });
+}
+function dijkstraAll(from, w) {
+  const dist = new Array(nodes.length).fill(Infinity), prev = new Array(nodes.length).fill(-1), done = new Array(nodes.length).fill(false);
+  dist[from] = 0;
+  for (;;) {
+    let u = -1, best = Infinity;
+    for (let i = 0; i < nodes.length; i++) if (!done[i] && dist[i] < best) { best = dist[i]; u = i; }
+    if (u < 0) break;
+    done[u] = true;
+    for (const { to: v, e } of adj[u]) { const c = w(e); if (isFinite(c) && dist[u] + c < dist[v]) { dist[v] = dist[u] + c; prev[v] = u; } }
+  }
+  return { dist, prev };
+}
+// path from n back to the tree's source (graph is undirected, so this is n -> source)
+function pathTo(tree, n) { if (!isFinite(tree.dist[n])) return null; const p = [n]; while (tree.prev[p[p.length - 1]] !== -1) p.push(tree.prev[p[p.length - 1]]); return p; }
+function agentDispatchAll() {
+  const waiting = S.reqs.filter((r) => r.status === 'waiting');
+  if (!waiting.length) return;
+  const pool = S.cars.filter((c) => c.battery > 0 && (isFree(c) || (c.state === 'charging' && c.plugged) || (c.state === 'riding' && !c.next && c.job)));
+  if (!pool.length) return;
+  const all = new Map();
+  for (const r of waiting) {
+    const tripR = dijkstra(r.from, r.to, timeW); if (!tripR) continue;
+    const trip = pathStats(tripR.path);
+    const after = bestDepotByTime(r.to);
+    const backPct = after ? after.st.pct : 6;
+    const tree = dijkstraAll(r.from, timeW);
+    const cands = [];
+    for (const c of pool) {
+      let start, lead = { t: 0, pct: 0 }, path;
+      const chained = c.state === 'riding';
+      if (chained) {
+        lead = remaining(c); if (!(lead.t < 300)) continue;
+        start = targetOf(c); path = pathTo(tree, start); if (!path) continue;
+      } else if (c.prog > 0) {
+        const cur = c.path[c.seg], nxt = c.path[c.seg + 1];
+        const p = pathTo(tree, nxt); if (!p) continue; path = [cur, ...p];
+      } else { path = pathTo(tree, c.path[c.seg]); if (!path) continue; }
+      const a0 = pathStats(path, chained ? 0 : c.prog);
+      const a = { t: a0.t + lead.t, px: a0.px, pct: a0.pct };
+      const startBat = c.battery - lead.pct;
+      const need = a.pct + trip.pct + backPct + RESERVE;
+      const left = startBat - a.pct - trip.pct;
+      const feasible = startBat >= need;
+      const charging = c.state === 'charging';
+      const lowPen = Math.max(0, 35 - left) * 0.12 * (S.wBat + 0.3);
+      const age = (S.t - r.t0) / 60;
+      const cost = (a.t / 60) * (0.6 + S.wEff) + km(a.px) * (0.4 + S.wBat) * 0.8 + lowPen + (charging ? 1.2 + Math.max(0, c.chargeTo - c.battery) * 0.015 : 0) - age * 0.3;
+      cands.push({ r, c, a, need, left, feasible, cost, charging, chained, lead, trip, startBat });
+    }
+    all.set(r, { cands, trip, backPct });
+  }
+  const pairs = [];
+  for (const { cands } of all.values()) for (const x of cands) if (x.feasible) pairs.push(x);
+  pairs.sort((x, y) => x.cost - y.cost);
+  const usedC = new Set(), usedR = new Set();
+  for (const x of pairs) {
+    if (usedC.has(x.c) || usedR.has(x.r)) continue;
+    usedC.add(x.c); usedR.add(x.r);
+    commitAgent(x, all.get(x.r).cands);
+  }
+  for (const [r, info] of all) {
+    if (usedR.has(r) || r.heldLog || !info.cands.length) continue;
+    if (info.cands.some((x) => x.feasible)) continue;
+    r.heldLog = true;
+    const best = [...info.cands].sort((x, y) => y.startBat - x.startBat)[0];
+    log({ src: 'agent', kind: 'hold', tag: 'Hold', head: `${r.id} waits for a car with enough charge`, body: `Trip needs ${Math.round(info.trip.pct + info.backPct + RESERVE)}% including the drive to a charger and an ${RESERVE}% reserve. Best free car has ${Math.round(best.startBat)}%.` });
+  }
+}
+function commitAgent(x, cands) {
+  const { r, c: car, a, trip } = x;
+  if (x.charging) {
+    car.state = 'idle';
+    log({ src: 'agent', kind: 'charge', tag: 'Release', head: `${car.id} unplugged at ${Math.round(car.battery)}% to take ${r.id}`, body: `Enough for the trip, the drive to a charger and the reserve. Waiting for a full charge would cost ${r.name} more time.` });
+  }
+  r.etaT = S.t + a.t;
+  if (x.chained) { r.status = 'assigned'; r.car = car; car.next = r; }
+  else assign(r, car);
+  const alts = [];
+  for (const y of cands.filter((y) => y.c !== car).sort((p, q) => p.a.t - q.a.t).slice(0, 2)) {
+    let why;
+    if (!y.feasible) why = `${Math.round(y.startBat)}% can't cover trip + charger + reserve (${Math.round(y.need)}%)`;
+    else if (y.a.t < a.t) why = `${fmtMin(y.a.t)} away but ${y.left < 35 ? `would drop to ${Math.round(y.left)}%` : `drives ${fmtKm(y.a.px)} empty`}`;
+    else why = `${fmtMin(y.a.t - a.t)} slower to reach the rider`;
+    alts.push(`${y.c.id}${y.charging ? ' (charging)' : y.chained ? ' (finishing a trip)' : ''}: ${why}`);
+  }
+  const lead = x.chained ? `Finishes its current drop-off in ${fmtMin(x.lead.t)}, then ${fmtMin(a.t - x.lead.t)} to the rider` : a.t < 6 ? 'Already at the rider' : `Pickup in ${fmtMin(a.t)}`;
+  log({
+    src: 'agent', kind: 'dispatch', tag: x.chained ? 'Chain' : 'Dispatch', head: `${r.id} ${r.name} → ${car.id}`,
+    body: `${lead}, trip ${fmtKm(trip.px)} (${fmtMin(trip.t)}). Battery ${Math.round(car.battery)}% → ${Math.round(x.left)}% at drop-off.`,
+    alts,
+  });
+}
+
+/* ---------------- agent routines ---------------- */
+// true if the car can reach some waiting rider, finish the trip and still reach a charger with the reserve left
+function canServeAny(c) {
+  return S.reqs.some((r) => {
+    if (r.status !== 'waiting') return false;
+    const a = dijkstra(carNode(c), r.from, timeW), t = dijkstra(r.from, r.to, timeW); if (!a || !t) return false;
+    const back = bestDepotByTime(r.to);
+    return c.battery >= pathStats(a.path).pct + pathStats(t.path).pct + (back ? back.st.pct : 6) + RESERVE;
+  });
+}
+function agentCharge() {
+  const waiting = S.reqs.filter((r) => r.status === 'waiting').length;
+  const free = S.cars.filter((c) => c.state === 'idle');
+  const threshold = 18 + 16 * S.wBat;
+  for (const c of free) {
+    if (c.battery >= threshold) continue;
+    // stay out for the queue only if this car can still take one of those rides safely; otherwise it would sit idle forever
+    if (waiting > 0 && c.battery > 15 && free.length <= waiting && canServeAny(c)) continue;
+    const b = bestDepotByTime(carNode(c), c.battery); if (!b) continue;
+    c.depot = b.d; c.chargeTo = waiting > 2 ? 75 : 90;
+    sendTo(c, b.d.node, 'tocharge');
+    const idleNow = S.cars.filter((x) => x.state === 'idle').length;
+    const why = waiting > 0 && idleNow <= waiting ? 'Too low to take any waiting ride safely, so it charges now.'
+      : waiting === 0 ? `No riders waiting${idleNow ? ` and ${idleNow} other ${idleNow === 1 ? 'car' : 'cars'} free` : ''}, so charging now costs no pickups.`
+      : `${idleNow} ${idleNow === 1 ? 'car' : 'cars'} still free for ${waiting} waiting, so charging now costs no pickups.`;
+    const others = depotLoad(b.d) - 1;
+    log({ src: 'agent', kind: 'charge', tag: 'Charge', head: `${c.id} to ${b.d.name} at ${Math.round(c.battery)}%`, body: `${why} ${fmtMin(b.st.t)} drive, ${others === 0 ? 'chargers empty' : `${others} other ${others === 1 ? 'car' : 'cars'} charging there`}. Will stop at ${c.chargeTo}%.` });
+  }
+}
+function agentReroute(reason) {
+  let n = 0;
+  for (const c of S.cars) {
+    if (!['pickup', 'riding', 'tocharge', 'reposition'].includes(c.state)) continue;
+    if (c.seg >= c.path.length - 1) continue;
+    const cur = remaining(c);
+    const plan = planFrom(c, targetOf(c), timeW); if (!plan) continue;
+    const alt = pathStats(plan.path, plan.prog);
+    const save = cur.t - alt.t;
+    if (!(save >= S.rrMin * 60) && isFinite(cur.t)) continue;
+    if (plan.path.join() === c.path.slice(c.seg).join()) continue;
+    const after = c.state === 'tocharge' ? 0 : (bestDepotByTime(targetOf(c))?.st.pct ?? 6);
+    if (c.battery - alt.pct - after < RESERVE / 2 && c.state !== 'riding' && c.state !== 'tocharge') {
+      // the detour would leave too little to reach a charger: give the job back and charge instead
+      const b = bestDepotByTime(carNode(c), c.battery); if (!b) continue;
+      if (c.job) { c.job.status = 'waiting'; c.job.car = null; c.job = null; }
+      if (c.next) { c.next.status = 'waiting'; c.next.car = null; c.next = null; }
+      c.depot = b.d; c.chargeTo = 90; sendTo(c, b.d.node, 'tocharge'); n++;
+      log({ src: 'agent', kind: 'charge', tag: 'Charge', head: `${c.id} hands back its job and charges at ${b.d.name}`, body: `The detour needs ${alt.pct.toFixed(1)}% and would leave ${Math.round(c.battery - alt.pct - after)}% after the next charger run. Another car takes the rider.` });
+      continue;
+    }
+    // find what was wrong with the old route
+    let culprit = null;
+    for (let i = c.seg; i < c.path.length - 1; i++) { const e = E(c.path[i], c.path[i + 1]); if (e.kBlocked) { culprit = `the crash on ${e.name}`; break; } if (!culprit && e.kTraffic > 1.4) culprit = `traffic on ${e.name}`; }
+    setRoute(c, plan);
+    P().reroutes++; n++;
+    const dx = alt.px - cur.px;
+    log({ src: 'agent', kind: 'reroute', tag: 'Reroute', head: `${c.id} rerouted around ${culprit ?? 'a slower road'}`, body: `${isFinite(cur.t) ? `Saves ${fmtMin(save)}` : 'Old route was closed'}${Math.abs(dx) > 5 ? `, ${dx > 0 ? '+' : '−'}${fmtKm(Math.abs(dx))} distance` : ''}, ${Math.abs(alt.pct - cur.pct) < 0.1 ? 'same battery' : `${alt.pct > cur.pct ? '+' : '−'}${Math.abs(alt.pct - cur.pct).toFixed(1)}% battery`}.${c.job ? ` ${c.state === 'riding' ? c.job.name + ' aboard' : 'On the way to ' + c.job.name}.` : ''}` });
+  }
+  return n;
+}
+const REPO_MIN_RPH = 30, REPO_MIN_CROWD = 2, REPO_MAX_PX = 300;
+function agentReposition() {
+  const free = S.cars.filter((c) => c.state === 'idle' && c.battery > 40);
+  const waiting = S.reqs.some((r) => r.status === 'waiting');
+  const demand = S.rph * (S.rush ? 1.5 : 1);
+  if (waiting || free.length < 3 || demand < REPO_MIN_RPH) return;
+  for (const c of free) {
+    const crowd = free.filter((o) => o !== c && Math.hypot(o.x - c.x, o.y - c.y) < 135);
+    if (crowd.length < REPO_MIN_CROWD) continue;
+    let best = null;
+    for (const d of DISTRICTS) {
+      const covered = S.cars.filter((o) => (o.state === 'idle' || o.state === 'reposition') && Math.hypot(nodes[targetOf(o)].x - nodes[d.node].x, nodes[targetOf(o)].y - nodes[d.node].y) < 200).length;
+      const score = d.w / (1 + covered * 2);
+      if (!best || score > best.score) best = { d, score, covered };
+    }
+    const far = Math.hypot(nodes[best.d.node].x - c.x, nodes[best.d.node].y - c.y);
+    if (!best || best.covered > 0 || far < 150 || far > REPO_MAX_PX) continue;
+    sendTo(c, best.d.node, 'reposition');
+    const st = remaining(c);
+    log({ src: 'agent', kind: 'reposition', tag: 'Reposition', head: `${c.id} moves to ${best.d.name}`, body: `${crowd.length + 1} free cars were parked within a block of each other and ${best.d.name} had none. ${fmtKm(st.px)}, ${st.pct.toFixed(1)}% battery to cut future pickup waits there.` });
+    return;
+  }
+}
+
+/* ---------------- incidents ---------------- */
+function recomputeTraffic() {
+  applyIncidents(edges.map(() => 0), false);
+  applyIncidents(null, true);
+}
+function applyIncidents(_, belief) {
+  const T = belief ? 'kTraffic' : 'traffic', B = belief ? 'kBlocked' : 'blocked';
+  for (const e of edges) { e[T] = S.rush && e.rushy ? 1.6 : 1; e[B] = false; }
+  for (const inc of MAIN.incidents) {
+    if (belief && !inc.seen) continue;
+    const e = inc.edge;
+    if (inc.type === 'crash') { e[B] = true; }
+    else {
+      e[T] = Math.max(e[T], 3.4);
+      for (const f of edges) {
+        if (f === e) continue;
+        const shares = f.a === e.a || f.a === e.b || f.b === e.a || f.b === e.b;
+        const coll = (nodes[f.a].y === nodes[f.b].y) === (nodes[e.a].y === nodes[e.b].y);
+        if (shares && coll) f[T] = Math.max(f[T], 2.0);
+      }
+    }
+  }
+}
+function addIncident(type, e, src = 'user', dur) {
+  if (S.incidents.some((i) => i.edge === e)) return false;
+  dur = dur ?? (type === 'crash' ? 8 * 60 : 10 * 60);
+  S.incidents.push({ id: S.nextInc++, type, edge: e, until: S.t + dur, seen: false, src });
+  recomputeTraffic();
+  if (src === 'user') toast(`${type === 'crash' ? 'Crash' : 'Jam'} placed on ${e.name}. Nobody knows until a car gets close.`);
+  return true;
+}
+function distToEdge(x, y, e) {
+  const A = nodes[e.a], B = nodes[e.b], dx = B.x - A.x, dy = B.y - A.y;
+  const t = Math.max(0, Math.min(1, ((x - A.x) * dx + (y - A.y) * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(x - (A.x + dx * t), y - (A.y + dy * t));
+}
+const SENSOR_RANGE = 75;
+function discover(inc, car) {
+  inc.seen = true; inc.seenBy = car.id;
+  recomputeTraffic();
+  log({ src: 'agent', kind: 'incident', tag: 'Spotted', head: `${car.id} spotted ${inc.type === 'crash' ? 'a crash closing' : 'heavy traffic on'} ${inc.edge.name}`, body: 'Its sensors saw it on the way past. Shared with the whole fleet, and every route that uses it is checked now.' });
+  const n = agentReroute();
+  if (!n) log({ src: 'agent', kind: 'reroute', tag: 'Check', head: 'No other route uses it', body: 'Checked every active route. Nothing to change.' });
+}
+function sense() {
+  for (const inc of S.incidents) {
+    if (inc.seen) continue;
+    for (const c of S.cars) {
+      if (c.state === 'stranded') continue;
+      const p = carPos(c);
+      if (distToEdge(p.x, p.y, inc.edge) < SENSOR_RANGE) { discover(inc, c); break; }
+    }
+  }
+}
+function expireIncidents() {
+  const gone = S.incidents.filter((i) => i.until <= S.t);
+  if (gone.length) {
+    for (const g of gone) S.incidents.splice(S.incidents.indexOf(g), 1);
+    recomputeTraffic();
+    for (const g of gone) {
+      for (const c of [...MAIN.cars, ...(SHADOW ? SHADOW.cars : [])]) c.known.delete(g.edge.id);
+      if (g.seen && S.agent) log({ src: 'agent', kind: 'system', tag: 'Cleared', head: `${g.edge.name} is clear again`, body: 'A car drove past and saw the road open, so routes can use it again.' });
+    }
+  }
+}
+
+/* ---------------- sim step ---------------- */
+function step(dt) {
+  S.t += dt;
+  const T = S.timers;
+  if (!S.shadow && S.t >= T.spawn) {
+    spawnRequest();
+    // riders per hour come from the seed, with a slow seeded swell and Poisson gaps
+    const rate = S.rph * (S.rush ? 1.5 : 1) * (1 + 0.35 * Math.sin(S.t / 1800 + S.phase)) / 3600;
+    T.spawn = S.t + -Math.log(1 - rD()) / rate;
+  }
+  for (const c of S.cars) moveCar(c, dt);
+  // positions live in the sim, not the renderer, so the shadow city's Executor sees where its cars really are
+  for (const c of S.cars) { const p = carPos(c); c.x = p.x; c.y = p.y; }
+  for (const r of S.reqs) {
+    if ((r.status === 'waiting' || r.status === 'assigned') && S.t - r.t0 > CANCEL_AFTER && !r.vip && !r.rescue) {
+      r.status = 'cancelled'; P().cancelled++;
+      if (r.car && r.car.next === r) { r.car.next = null; }
+      else if (r.car) { const c = r.car; c.job = null; if (c.prog > 0) { c.path = [c.path[c.seg], c.path[c.seg + 1]]; c.seg = 0; c.state = 'reposition'; } else { c.path = [c.path[c.seg]]; c.seg = 0; c.state = 'idle'; } c.routeVer++; }
+      log({ src: 'exec', kind: 'hold', tag: 'Cancelled', head: `${r.id} ${r.name} gave up after 15 min` });
+    }
+  }
+  S.reqs = S.reqs.filter((r) => r.status !== 'done' && r.status !== 'cancelled' || S.t - r.t0 < 60);
+  if (S.t >= T.dispatch) { dispatch(); T.dispatch = S.t + 3; }
+  if (S.agent) {
+    if (S.t >= T.charge) { agentCharge(); T.charge = S.t + 10; }
+    if (S.t >= T.reroute) { agentReroute(); T.reroute = S.t + 25; }
+    if (S.t >= T.repo) { agentReposition(); T.repo = S.t + 180; }
+  } else if (S.t >= T.charge) {
+    T.charge = S.t + 10;
+    for (const c of S.cars) if (c.state === 'idle' && c.battery < 10) { const d = nearestDepotByDist(carNode(c)); c.depot = d; c.chargeTo = 100; sendTo(c, d.node, 'tocharge'); }
+  }
+  if (S.shadow) return;
+  expireIncidents();
+  while (S.hazIdx < S.hazards.length && S.hazards[S.hazIdx].t <= S.t) { const h = S.hazards[S.hazIdx++]; if (S.randomInc) addIncident(h.type, h.edge, 'seed', h.dur); }
+  if (S.agent && S.t >= T.sense) { sense(); T.sense = S.t + 4; }
+}
+
+/* ---------------- map drawing ---------------- */
+const el = (tag, attrs = {}, parent) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.append(n); return n; };
+function drawBase() {
+  const g = $('gBase');
+  el('rect', { x: 0, y: 0, width: 980, height: 690, fill: 'var(--block)' }, g);
+  // building lots
+  for (let r = 0; r < ROWS.length + 1; r++) for (let c = 0; c < COLS.length + 1; c++) {
+    if (r === 3) continue;
+    const x0 = c === 0 ? 0 : COLS[c - 1] + 13, x1 = c === COLS.length ? 980 : COLS[c] - 13;
+    const y0 = r === 0 ? 0 : ROWS[r - 1] + 13, y1 = r === ROWS.length ? 690 : ROWS[r] - 13;
+    if (x1 - x0 < 20 || y1 - y0 < 20) continue;
+    if (r === 4 && (c === 6 || c === 7)) continue;
+    const split = rnd() < 0.5;
+    const n = 2 + Math.floor(rnd() * 2);
+    for (let k = 0; k < n; k++) {
+      const pad = 4;
+      if (split) { const w = (x1 - x0) / n; el('rect', { class: 'lot', x: x0 + k * w + pad / 2, y: y0 + pad, width: w - pad, height: (y1 - y0) * (0.55 + rnd() * 0.4) - pad, rx: 1.5 }, g); }
+      else { const h = (y1 - y0) / n; el('rect', { class: 'lot', x: x0 + pad, y: y0 + k * h + pad / 2, width: (x1 - x0) * (0.55 + rnd() * 0.4) - pad, height: h - pad, rx: 1.5 }, g); }
+    }
+  }
+  // park
+  el('rect', { class: 'park', x: COLS[5] + 13, y: ROWS[3] + 13, width: COLS[7] - COLS[5] - 26, height: ROWS[4] - ROWS[3] - 26, rx: 3 }, g);
+  for (let i = 0; i < 46; i++) el('circle', { class: 'tree', cx: COLS[5] + 24 + rnd() * (COLS[7] - COLS[5] - 48), cy: ROWS[3] + 24 + rnd() * (ROWS[4] - ROWS[3] - 48), r: 3 + rnd() * 4 }, g);
+  // river
+  const ry = (ROWS[2] + ROWS[3]) / 2;
+  let d = `M -10 ${ry - 30}`;
+  for (let x = 0; x <= 1000; x += 40) d += ` L ${x} ${ry - 28 + Math.sin(x / 90) * 6}`;
+  for (let x = 1000; x >= -10; x -= 40) d += ` L ${x} ${ry + 28 + Math.sin(x / 90 + 1) * 6}`;
+  el('path', { class: 'water', d: d + ' Z' }, g);
+  for (let i = 0; i < 18; i++) { const x = 20 + i * 55 + rnd() * 20, y = ry - 12 + rnd() * 24; el('path', { class: 'ripple', d: `M ${x} ${y} q 6 -4 12 0 t 12 0` }, g); }
+  // roads
+  for (const e of edges) { const A = nodes[e.a], B = nodes[e.b]; el('line', { class: 'road', x1: A.x, y1: A.y, x2: B.x, y2: B.y, 'stroke-width': 20 }, g); }
+  for (const n of nodes) if (adj[n.id].length) el('rect', { x: n.x - 10, y: n.y - 10, width: 20, height: 20, fill: 'var(--road)' }, g);
+  for (const e of edges) {
+    const A = nodes[e.a], B = nodes[e.b];
+    const hz = A.y === B.y, s = 13;
+    const x1 = hz ? A.x + s : A.x, x2 = hz ? B.x - s : B.x, y1 = hz ? A.y : A.y + s, y2 = hz ? B.y : B.y - s;
+    el('line', { class: 'lane', x1, y1, x2, y2 }, g);
+    if (/Bridge/.test(e.name)) { for (const o of [-12, 12]) el('line', { class: 'bridge-rail', x1: A.x + o, y1: A.y + 14, x2: B.x + o, y2: B.y - 14 }, g); }
+  }
+  // crosswalks near busy districts
+  for (const n of [9, 14, 35, 41, 4]) { const N = nodes[n]; el('line', { class: 'zebra', x1: N.x - 9, y1: N.y - 15, x2: N.x + 9, y2: N.y - 15 }, g); el('line', { class: 'zebra', x1: N.x - 15, y1: N.y - 9, x2: N.x - 15, y2: N.y + 9, 'stroke-dasharray': '2 3' }, g); }
+  // labels
+  const legend = (txt, x, y) => { const t = el('text', { class: 'dlabel', x: 0, y: 0, 'text-anchor': 'middle', transform: `translate(${x} ${y + 9}) scale(1 1.7)` }, g); t.textContent = txt; };
+  for (const dd of DISTRICTS) legend(dd.name, dd.x, dd.y);
+  legend('Hill Park', (COLS[5] + COLS[7]) / 2, (ROWS[3] + ROWS[4]) / 2);
+  const rv = el('text', { class: 'dlabel', x: 120, y: ry + 5, 'text-anchor': 'middle', style: 'fill-opacity:.16' }, g); rv.textContent = 'Mill River';
+  ROWN.forEach((nm, r) => { const t = el('text', { class: 'slabel', x: 962, y: ROWS[r] + 3, 'text-anchor': 'end' }, g); t.textContent = nm; });
+  COLN.forEach((nm, c) => { const t = el('text', { class: 'slabel', x: COLS[c], y: 682, 'text-anchor': 'middle' }, g); t.textContent = nm; });
+  // depots
+  for (const dp of DEPOTS) {
+    const N = nodes[dp.node], x = N.x + dp.ox, y = N.y + dp.oy;
+    el('rect', { class: 'depot-pad', x, y, width: 60, height: 32, rx: 2 }, g);
+    for (let k = 1; k < 3; k++) el('line', { x1: x + k * 20, y1: y + 4, x2: x + k * 20, y2: y + 28, stroke: 'var(--green)', 'stroke-opacity': .5, 'stroke-width': 1 }, g);
+    const u = el('use', { href: '#i-bolt', x: x + 2, y: y + 8, width: 16, height: 16, style: 'color:var(--green)' }, g);
+    const t = el('text', { class: 'depot-label', x, y: y - 5 }, g); t.textContent = dp.name;
+    dp.countEl = el('text', { class: 'depot-label', x: x + 60, y: y + 46, 'text-anchor': 'end', style: 'fill:var(--paint-2)' }, g);
+  }
+  // hit areas
+  const hg = $('gHit');
+  for (const e of edges) {
+    const A = nodes[e.a], B = nodes[e.b];
+    const h = el('line', { class: 'hit', x1: A.x, y1: A.y, x2: B.x, y2: B.y }, hg);
+    h.addEventListener('pointerenter', () => showHover(e));
+    h.addEventListener('pointerleave', () => showHover(null));
+    h.addEventListener('click', (ev) => { ev.stopPropagation(); if (S.tool === 'crash' || S.tool === 'jam') { addIncident(S.tool, e); showHover(null); } });
+  }
+}
+function showHover(e) {
+  const g = $('gHover'); g.replaceChildren();
+  if (!e) return;
+  const A = nodes[e.a], B = nodes[e.b];
+  el('line', { class: 'hover-edge', x1: A.x, y1: A.y, x2: B.x, y2: B.y, stroke: S.tool === 'crash' ? 'var(--red)' : 'var(--orange)' }, g);
+  $('hint').textContent = e.name;
+}
+
+const ROUTE_COL = { pickup: 'var(--blue)', riding: 'var(--yellow)', tocharge: 'var(--green)', reposition: 'var(--paint)', hold: 'var(--orange)' };
+const carEls = new Map();
+function buildCars() {
+  const g = $('gCars'), rg = $('gRoutes');
+  for (const c of S.cars) {
+    const under = el('polyline', { class: 'route-under' }, rg);
+    const route = el('polyline', { class: 'route' }, rg);
+    const grp = el('g', { class: 'car', tabindex: -1 }, g);
+    const ring = el('circle', { class: 'car-ring', r: 18, visibility: 'hidden' }, grp);
+    const body = el('g', {}, grp);
+    body.dataset.scale = '1';
+    el('rect', { class: 'car-body', x: -10, y: -6, width: 20, height: 12, rx: 3.5 }, body);
+    el('rect', { class: 'car-glass', x: 2.5, y: -4.2, width: 4, height: 8.4, rx: 1 }, body);
+    const lamp = el('rect', { x: -6.5, y: -2.5, width: 5, height: 5, rx: 1, fill: 'var(--paint-2)' }, body);
+    const num = el('text', { class: 'car-num', x: 0, y: -14, 'text-anchor': 'middle' }, grp); num.textContent = c.num;
+    grp.addEventListener('click', (ev) => { ev.stopPropagation(); select(c); });
+    carEls.set(c, { grp, body, ring, lamp, route, under, num, ver: -1, len: 0 });
+  }
+}
+const LAMP = { idle: 'var(--paint-2)', pickup: 'var(--blue)', riding: 'var(--yellow)', tocharge: 'var(--green)', charging: 'var(--green)', reposition: 'var(--paint)', hold: 'var(--orange)', stranded: 'var(--red)' };
+function carPos(c) {
+  if (c.seg >= c.path.length - 1 || c.prog === 0) { const n = nodes[c.path[c.seg]]; return { x: n.x, y: n.y, ang: c.ang }; }
+  const A = nodes[c.path[c.seg]], B = nodes[c.path[c.seg + 1]], e = E(A.id, B.id), f = c.prog / e.len;
+  return { x: A.x + (B.x - A.x) * f, y: A.y + (B.y - A.y) * f, ang: Math.atan2(B.y - A.y, B.x - A.x) * 180 / Math.PI };
+}
+function laneOffset(x1, y1, x2, y2, o) { const L = Math.hypot(x2 - x1, y2 - y1) || 1; return [-(y2 - y1) / L * o, (x2 - x1) / L * o]; }
+let tagSize = 11;
+function fitTags() {
+  const w = $('map').getBoundingClientRect(); const k = Math.min(w.width / 980, w.height / 690) || 1;
+  tagSize = Math.max(11, Math.min(20, 12 / k));
+  for (const r of carEls.values()) r.num.style.fontSize = tagSize.toFixed(1) + 'px';
+  $('map').style.setProperty('--map-k', k.toFixed(3));
+}
+addEventListener('resize', fitTags);
+function renderMap(now) {
+  const anySel = !!S.selected;
+  $('gRoutes').classList.toggle('dim', anySel);
+  for (const c of S.cars) {
+    const r = carEls.get(c);
+    const p = carPos(c);
+    // drive on the right: offset 5px from centreline
+    let ox = 0, oy = 0;
+    if (c.seg < c.path.length - 1) { const A = nodes[c.path[c.seg]], B = nodes[c.path[c.seg + 1]]; [ox, oy] = laneOffset(A.x, A.y, B.x, B.y, 5); }
+    let ang = p.ang; let da = ang - c.ang; while (da > 180) da -= 360; while (da < -180) da += 360;
+    c.ang += da * 0.35; c.x = p.x; c.y = p.y;
+    r.grp.setAttribute('transform', `translate(${(p.x + ox).toFixed(1)} ${(p.y + oy).toFixed(1)})`);
+    c.sx = p.x + ox; c.sy = p.y + oy;
+    const crowd = S.cars.some((o) => o.i < c.i && o.sx != null && Math.abs(o.sx - c.sx) < tagSize * 2.4 && Math.abs(o.sy - c.sy) < tagSize * 2.2);
+    r.num.setAttribute('y', crowd ? (12 + tagSize).toFixed(1) : (-10).toFixed(1));
+    r.body.setAttribute('transform', `rotate(${c.ang.toFixed(1)}) scale(1.25)`);
+    r.lamp.setAttribute('fill', LAMP[c.state] || 'var(--paint-2)');
+    r.ring.setAttribute('visibility', S.selected === c || S.hoverCar === c ? 'visible' : 'hidden');
+    r.ring.setAttribute('stroke', c.state === 'stranded' ? 'var(--red)' : 'var(--yellow)');
+    // route
+    const moving = c.seg < c.path.length - 1 && ROUTE_COL[c.state === 'hold' ? 'hold' : c.state];
+    if (!moving) { r.route.setAttribute('points', ''); r.under.setAttribute('points', ''); continue; }
+    const pts = [[p.x + ox, p.y + oy]];
+    for (let i = c.seg + 1; i < c.path.length; i++) {
+      const A = nodes[c.path[i - 1]], B = nodes[c.path[i]];
+      const [qx, qy] = laneOffset(A.x, A.y, B.x, B.y, 5);
+      const C = i + 1 < c.path.length ? nodes[c.path[i + 1]] : null;
+      if (C) { const [sx, sy] = laneOffset(B.x, B.y, C.x, C.y, 5); pts.push([B.x + (qx + sx) / 2, B.y + (qy + sy) / 2]); }
+      else pts.push([B.x + qx, B.y + qy]);
+    }
+    let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    const str = pts.map((q) => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ');
+    r.route.setAttribute('points', str); r.under.setAttribute('points', str);
+    r.route.setAttribute('stroke', ROUTE_COL[c.state === 'hold' ? 'hold' : c.state]);
+    const k = reduceMotion ? 1 : Math.min(1, (now - c.drawT) / 700);
+    const ease = 1 - Math.pow(1 - k, 3);
+    if (k < 1) { r.route.setAttribute('stroke-dasharray', `${L.toFixed(1)} ${(L + 10).toFixed(1)}`); r.route.setAttribute('stroke-dashoffset', (L * (1 - ease)).toFixed(1)); }
+    else { r.route.removeAttribute('stroke-dasharray'); r.route.removeAttribute('stroke-dashoffset'); }
+    r.route.classList.toggle('sel', S.selected === c); r.under.classList.toggle('sel', S.selected === c);
+  }
+}
+function renderPins() {
+  const g = $('gPins'); g.replaceChildren();
+  for (const r of S.reqs) {
+    if (r.status === 'waiting' || r.status === 'assigned') {
+      const N = nodes[r.from];
+      const grp = el('g', { transform: `translate(${N.x + 12} ${N.y - 14})` }, g);
+      el('use', { href: '#i-pin', x: -9, y: -9, width: 18, height: 18, style: `color:var(--blue)` }, grp);
+      el('circle', { cx: 0, cy: -1.5, r: 3, fill: 'var(--blue)' }, grp);
+      if (r.mine) { const t = el('text', { class: 'pin-label', x: 12, y: 2 }, grp); t.textContent = 'You'; }
+    }
+    if (r.status === 'riding' || r.status === 'assigned' || (r.mine && r.status === 'waiting')) {
+      const N = nodes[r.to];
+      const col = r.status === 'riding' ? 'var(--yellow)' : 'var(--blue)';
+      const grp = el('g', { transform: `translate(${N.x - 12} ${N.y + 12})`, opacity: r.status === 'riding' ? 1 : .55 }, g);
+      el('rect', { x: -4, y: -4, width: 8, height: 8, fill: col, stroke: 'var(--road)', 'stroke-width': 1.5, transform: 'rotate(45)' }, grp);
+    }
+  }
+  if (S.rideDraft != null) {
+    const N = nodes[S.rideDraft];
+    const grp = el('g', { transform: `translate(${N.x + 12} ${N.y - 14})` }, g);
+    el('use', { href: '#i-pin', x: -10, y: -10, width: 20, height: 20, style: 'color:var(--paint)' }, grp);
+  }
+}
+function renderIncidents() {
+  const g = $('gTraffic'); g.replaceChildren();
+  for (const e of edges) {
+    if (e.traffic <= 1.05 || e.blocked) continue;
+    const A = nodes[e.a], B = nodes[e.b];
+    const op = Math.min(0.85, (e.traffic - 1) / 2.6);
+    el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, stroke: 'var(--orange)', 'stroke-opacity': op.toFixed(2), 'stroke-width': 20, 'stroke-dasharray': e.traffic > 3 ? '10 4' : '4 6' }, g);
+  }
+  const gi = $('gInc'); gi.replaceChildren();
+  for (const inc of S.incidents) {
+    const e = inc.edge, A = nodes[e.a], B = nodes[e.b];
+    if (inc.type === 'crash') el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, stroke: 'var(--red)', 'stroke-width': 20, 'stroke-opacity': inc.seen ? .5 : .25, 'stroke-dasharray': '6 5' }, g);
+    const grp = el('g', { transform: `translate(${e.mx} ${e.my})`, class: inc.seen ? 'inc' : 'inc unseen' }, gi);
+    el('circle', { class: 'inc-badge', r: 12, fill: inc.type === 'crash' ? 'var(--red)' : 'var(--orange)' }, grp);
+    el('use', { href: inc.type === 'crash' ? '#i-crash' : '#i-jam', x: -8, y: -8.5, width: 16, height: 16, style: 'color:var(--road)' }, grp);
+    const t = el('text', { class: 'inc-time', x: 0, y: 24, 'text-anchor': 'middle' }, grp); t.textContent = (inc.seen ? '' : 'hidden · ') + Math.ceil((inc.until - S.t) / 60) + ' min';
+  }
+  for (const dp of DEPOTS) { const n = S.cars.filter((c) => c.state === 'charging' && c.depot === dp).length; dp.countEl.textContent = n ? `${n} charging` : ''; }
+}
+
+/* ---------------- panels ---------------- */
+const STATE_TXT = { idle: 'Free', pickup: 'To pickup', riding: 'Rider aboard', tocharge: 'To charger', charging: 'Charging', reposition: 'Repositioning', hold: 'Held at incident', stranded: 'Out of battery' };
+const rowEls = new Map();
+function buildFleet() {
+  const ul = $('cars');
+  for (const c of S.cars) {
+    const li = document.createElement('li');
+    li.innerHTML = `<button class="car-btn" aria-pressed="false"><span class="car-id">${c.num}</span><span class="car-state" data-s="idle"><i></i><em></em></span><span class="car-job"></span><span class="bat"><span class="bat-num"></span><span class="bat-bar"><b></b></span></span></button>`;
+    const btn = li.firstChild;
+    btn.addEventListener('click', () => select(S.selected === c ? null : c));
+    btn.setAttribute('aria-label', `Car ${c.id}`);
+    ul.append(li);
+    rowEls.set(c, { btn, st: btn.querySelector('.car-state'), em: btn.querySelector('em'), job: btn.querySelector('.car-job'), bat: btn.querySelector('.bat'), num: btn.querySelector('.bat-num'), bar: btn.querySelector('.bat-bar b') });
+  }
+}
+function select(c) { S.selected = c; for (const [car, r] of rowEls) r.btn.setAttribute('aria-pressed', String(car === c)); }
+function jobText(c) {
+  if (c.job) { const r = c.job; const st = remaining(c); const eta = isFinite(st.t) ? ` · ${Math.max(1, Math.round(st.t / 60))} min` : ''; return c.state === 'riding' ? `${r.name} to ${corner(r.to)}${eta}${c.next ? ' · then ' + c.next.id : ''}` : `${r.id} ${r.name} at ${corner(r.from)}${eta}`; }
+  if (c.state === 'charging') return c.plugged ? `${c.depot?.name ?? 'Depot'} · to ${c.chargeTo}%` : `${c.depot?.name ?? 'Depot'} · waiting for a bay`;
+  if (c.state === 'tocharge') return `${c.depot?.name ?? 'Depot'}`;
+  if (c.state === 'reposition') return `to ${areaOf(targetOf(c))}`;
+  if (c.state === 'stranded') return 'Tow on the way';
+  return `Parked at ${corner(carNode(c))}`;
+}
+function renderFleet() {
+  let busy = 0, chg = 0;
+  for (const c of S.cars) {
+    const r = rowEls.get(c);
+    const s = c.state;
+    if (['pickup', 'riding'].includes(s)) busy++;
+    if (s === 'charging' || s === 'tocharge') chg++;
+    r.st.dataset.s = s; r.em.textContent = STATE_TXT[s];
+    r.job.textContent = jobText(c);
+    const b = Math.max(0, c.battery);
+    r.num.textContent = Math.round(b) + '%';
+    r.bar.style.setProperty('--v', b.toFixed(1));
+    r.bat.dataset.lvl = b < 20 ? 'low' : b < 40 ? 'mid' : 'ok';
+  }
+  $('fleetSum').textContent = `${busy} on jobs · ${chg} charging`;
+}
+function renderQueue() {
+  const ul = $('queue');
+  const list = S.reqs.filter((r) => r.status === 'waiting' || r.status === 'assigned').sort((a, b) => a.t0 - b.t0);
+  $('queueSum').textContent = `${list.filter((r) => r.status === 'waiting').length} unassigned · ${list.length} waiting`;
+  if (!list.length) { ul.innerHTML = '<li class="empty">No one waiting. New requests appear here, or use “Request a ride” to book one yourself.</li>'; return; }
+  ul.replaceChildren(...list.map((r) => {
+    const li = document.createElement('li'); li.className = 'rq'; li.dataset.mine = r.mine; li.dataset.late = S.t - r.t0 > 8 * 60;
+    const w = S.t - r.t0; const ws = `${Math.floor(w / 60)}:${String(Math.floor(w % 60)).padStart(2, '0')}`;
+    let eta = 'unassigned';
+    if (r.car) {
+      const t = r.car.job === r ? remaining(r.car).t : (r.etaT ?? S.t) - S.t;
+      eta = `${r.car.id}${isFinite(t) ? ' · ' + Math.max(1, Math.round(t / 60)) + ' min' : ''}${r.car.next === r ? ' (after drop-off)' : ''}`;
+    }
+    li.innerHTML = `<b></b><span class="who"></span><span class="wait"></span><span class="where"></span>`;
+    li.children[0].textContent = r.id; li.children[1].textContent = `${r.name}${r.rescue ? ' (rescue)' : ''} · ${eta}`; li.children[2].textContent = ws + ' wait';
+    li.children[3].textContent = `${corner(r.from)} → ${corner(r.to)}`;
+    return li;
+  }));
+}
+function metricVals(p) {
+  if (!p) return null;
+  return {
+    wait: p.pickups >= 12 ? p.waitSum / p.pickups / 60 : null,
+    served: p.pickups + p.cancelled >= 12 ? p.pickups / (p.pickups + p.cancelled) * 100 : null,
+    delay: p.trips >= 8 ? (p.rideSum - p.rideFree) / p.trips : null,
+    empty: p.totalPx > 3000 ? p.emptyPx / p.totalPx * 100 : null,
+    tpc: p.trips >= 8 && p.batUsed > 3 ? p.trips / (p.batUsed / 100) : null,
+    lost: p.holdS / 60, stranded: p.stranded, reroutes: p.reroutes,
+  };
+}
+function cmpLine(cur, base, lowerBetter, unit, dp = 1) {
+  if (cur == null || base == null) return '';
+  const d = cur - base; const better = lowerBetter ? d < 0 : d > 0;
+  if (Math.abs(d) < Math.pow(10, -dp)) return `<span>same as without agent</span>`;
+  return `<b class="${better ? 'good' : 'bad'}">${d > 0 ? '+' : '−'}${Math.abs(d).toFixed(dp)}${unit}</b> vs ${base.toFixed(dp)}`;
+}
+function renderMetrics() {
+  const cur = metricVals(P()); const base = S.agent && SHADOW ? metricVals(SHADOW.periods.exec) : null;
+  $('mWait').innerHTML = cur.wait == null ? '–' : `${cur.wait.toFixed(1)}<small>min</small>`;
+  $('mEmpty').innerHTML = cur.empty == null ? '–' : `${cur.empty.toFixed(0)}<small>%</small>`;
+  $('mTpc').innerHTML = cur.tpc == null ? '–' : `${cur.tpc.toFixed(1)}<small>trips</small>`;
+  $('mLost').innerHTML = cur.delay == null ? '–' : `${Math.max(0, Math.round(cur.delay))}<small>s</small>`;
+  const gather = '<span>measuring with agent…</span>';
+  const served = (v) => v == null ? '' : `${Math.round(v)}%`;
+  $('cWait').innerHTML = base ? (cur.wait == null ? gather : `${cmpLine(cur.wait, base.wait, true, ' min')}<span class="cmp-2">served ${served(cur.served)} vs ${served(base.served)}</span>`)
+    : `<span>request to pickup</span>${cur.served == null ? '' : `<span class="cmp-2">${served(cur.served)} of requests served</span>`}`;
+  $('cEmpty').innerHTML = base ? (cur.empty == null ? gather : cmpLine(cur.empty, base.empty, true, ' pts', 0)) : '<span>share of km driven with no rider</span>';
+  $('cTpc').innerHTML = base ? (cur.tpc == null ? gather : cmpLine(cur.tpc, base.tpc, false, '', 1)) : '<span>trips per 100% battery used</span>';
+  $('cLost').innerHTML = base
+    ? (cur.delay == null || base.delay == null ? gather : `${cmpLine(Math.max(0, cur.delay), Math.max(0, base.delay), true, ' s', 0)}<span class="cmp-2">stranded ${cur.stranded} vs ${base.stranded}</span>`)
+    : `<span>extra ride time per trip from crashes and jams</span><span class="cmp-2">${cur.stranded} stranded</span>`;
+}
+function renderChart() {
+  const svg = $('chart'); svg.replaceChildren();
+  const W = 240, H = 52, pad = 2;
+  const pts = []; const s = S.waitSeries;
+  for (let i = 0; i < s.length; i++) { const win = s.slice(Math.max(0, i - 5), i + 1); pts.push({ t: s[i].t, w: win.reduce((a, b) => a + b.w, 0) / win.length }); }
+  const t0 = 8 * 3600, t1 = Math.max(S.t, t0 + 600);
+  const maxW = Math.max(8, ...pts.map((p) => p.w)) * 1.1;
+  const X = (t) => pad + (t - t0) / (t1 - t0) * (W - pad * 2), Y = (w) => H - 4 - w / maxW * (H - 10);
+  for (const gw of [5, 10, 15, 20]) if (gw < maxW) el('line', { x1: 0, x2: W, y1: Y(gw), y2: Y(gw), stroke: 'var(--line)', 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' }, svg);
+  if (S.connectT) { el('rect', { x: X(S.connectT), y: 0, width: W - X(S.connectT), height: H, fill: 'var(--yellow)', 'fill-opacity': .07 }, svg); el('line', { x1: X(S.connectT), x2: X(S.connectT), y1: 0, y2: H, stroke: 'var(--yellow)', 'stroke-width': 1.5, 'stroke-dasharray': '3 2', 'vector-effect': 'non-scaling-stroke' }, svg); }
+  if (SHADOW && SHADOW.waitSeries.length > 1) {
+    const sh = SHADOW.waitSeries; const sp = sh.map((q, i) => { const win = sh.slice(Math.max(0, i - 5), i + 1); return { t: q.t, w: win.reduce((a, b) => a + b.w, 0) / win.length }; });
+    el('path', { d: sp.map((p, i) => `${i ? 'L' : 'M'}${X(p.t).toFixed(1)} ${Y(Math.min(p.w, maxW)).toFixed(1)}`).join(' '), fill: 'none', stroke: 'var(--paint-2)', 'stroke-width': 1.8, 'stroke-dasharray': '1.5 3', 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke' }, svg);
+  }
+  if (pts.length > 1) {
+    const d = pts.map((p, i) => `${i ? 'L' : 'M'}${X(p.t).toFixed(1)} ${Y(p.w).toFixed(1)}`).join(' ');
+    el('path', { d: `${d} L ${X(pts[pts.length - 1].t).toFixed(1)} ${H} L ${X(pts[0].t).toFixed(1)} ${H} Z`, fill: 'var(--paint)', 'fill-opacity': .08 }, svg);
+    el('path', { d, fill: 'none', stroke: 'var(--paint)', 'stroke-width': 1.6, 'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round' }, svg);
+  }
+  const lab = S.connectT ? 'shaded: agent connected' : 'no agent yet';
+  $('chartNote').innerHTML = SHADOW ? '<i></i>without agent' : S.connectT ? 'shaded from when the agent connected' : 'Connect your agent to compare';
+  svg.setAttribute('aria-label', `Average pickup wait over time, ${lab}`);
+  $('chart').previousElementSibling.textContent = pts.length ? `Wait trend · ${pts[pts.length - 1].w.toFixed(1)} min` : 'Wait trend';
+}
+
+/* ---------------- agent connection ---------------- */
+function setAgentUI() {
+  const a = $('agent');
+  a.dataset.state = S.connecting ? 'connecting' : S.agent ? 'on' : 'off';
+  const btn = $('connect');
+  btn.disabled = S.connecting;
+  btn.querySelector('span').textContent = S.connecting ? 'Connecting…' : S.agent ? 'Disconnect agent' : 'Connect agent';
+  const pill = $('agentPill'); pill.dataset.on = String(S.agent);
+  pill.querySelector('span').textContent = S.agent ? 'Agent dispatching' : 'Basic Executor';
+  $('agentSince').textContent = S.agent ? `since ${clockStr(S.agentSince)}` : 'not connected';
+}
+$('connect').addEventListener('click', () => {
+  if (S.connecting) return;
+  if (S.agent) {
+    S.agent = false; SHADOW = null; setAgentUI();
+    S.periods.exec = newPeriod(S.t);
+    $('handshake').replaceChildren();
+    log({ src: 'exec', kind: 'system', tag: 'Agent', head: 'Agent disconnected', body: 'The Executor is dispatching on its own again: nearest car, shortest road.' });
+    return;
+  }
+  const addr = $('agentUrl').value.trim() || 'agent://alvin/robro-dispatch';
+  if (!/^[a-z][a-z0-9+.-]*:\/\/\S+$/i.test(addr)) { toast('Enter an agent address like agent://name/service'); $('agentUrl').focus(); return; }
+  S.connecting = true; setAgentUI();
+  $('agentAddr').textContent = addr;
+  const hs = $('handshake'); hs.replaceChildren();
+  const lines = [`Reaching ${addr}`, 'Agent identified: Alvin’s dispatch agent', 'Scopes granted: fleet.read · dispatch.decide · route.override · charge.schedule', 'Executor now routes every decision through your agent'];
+  lines.forEach((t, i) => setTimeout(() => { const li = document.createElement('li'); li.textContent = t; hs.append(li); }, reduceMotion ? 0 : 380 * i));
+  setTimeout(() => {
+    S.connecting = false; S.agent = true; S.agentSince = S.t; S.connectT = S.connectT ?? S.t;
+    S.periods.agent = newPeriod(S.t);
+    if (innerHeight < 900) $('tune').open = false;
+    SHADOW = cloneWorld(MAIN);
+    setAgentUI();
+    const open = S.reqs.filter((r) => r.status === 'waiting').length;
+    log({ src: 'agent', kind: 'system', tag: 'Online', head: 'Agent connected to the Executor', body: `Reviewing 10 cars, ${open} open request${open === 1 ? '' : 's'} and ${S.incidents.length} incident${S.incidents.length === 1 ? '' : 's'}. Goals: shortest waits, least empty driving, most trips per charge. A copy of the city keeps running without the agent, with the same riders and incidents, so the metrics compare like for like.` });
+    for (const c of S.cars) c.known.clear();
+    S.timers.charge = S.t; S.timers.reroute = S.t; S.timers.repo = S.t + 30;
+    agentReroute();
+    setTimeout(() => (hs.replaceChildren()), 4000);
+  }, reduceMotion ? 50 : 380 * lines.length + 200);
+});
+const tuneSum = () => { $('tuneSum').textContent = `eff ${Math.round(S.wEff * 100)} · battery ${Math.round(S.wBat * 100)} · reroute ≥${S.rrMin.toFixed(1)} min`; };
+const wire = (id, out, fn) => { const i = $(id); const upd = () => { $(out).textContent = fn(+i.value); tuneSum(); }; i.addEventListener('input', upd); upd(); };
+wire('wEff', 'oEff', (v) => { S.wEff = v / 100; return v; });
+wire('wBat', 'oBat', (v) => { S.wBat = v / 100; return v; });
+wire('wRr', 'oRr', (v) => { S.rrMin = v / 10; return (v / 10).toFixed(1) + ' min'; });
+
+/* ---------------- controls ---------------- */
+$('pause').addEventListener('click', () => {
+  S.paused = !S.paused;
+  const b = $('pause'); b.querySelector('use').setAttribute('href', S.paused ? '#i-play' : '#i-pause');
+  b.querySelector('span').textContent = S.paused ? 'Resume' : 'Pause';
+  b.setAttribute('aria-label', S.paused ? 'Resume simulation' : 'Pause simulation');
+});
+document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => {
+  S.speed = +b.dataset.speed;
+  document.querySelectorAll('[data-speed]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+}));
+$('rush').addEventListener('change', (e) => {
+  S.rush = e.target.checked; recomputeTraffic();
+  S.timers.spawn = Math.min(S.timers.spawn, S.t + 20);
+  log({ src: 'exec', kind: 'incident', tag: 'Traffic', head: S.rush ? 'Rush hour: busier roads around Old Town, University and Market' : 'Rush hour over', body: S.rush ? 'Ride requests up by half.' : undefined });
+  if (S.agent) agentReroute();
+});
+$('randomInc').addEventListener('change', (e) => { S.randomInc = e.target.checked; });
+const HINTS = { none: 'Pick a tool, then click the map. Crashes close a road; jams slow it down.', crash: 'Click a road to close it with a crash. Esc to stop.', jam: 'Click a road to add heavy traffic. Esc to stop.', ride: 'Click where you want to be picked up. Esc to cancel.' };
+function setTool(t) {
+  S.tool = S.tool === t ? 'none' : t; S.rideDraft = null;
+  $('mapwrap').dataset.tool = S.tool;
+  document.querySelectorAll('.tool').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kind === S.tool)));
+  $('hint').textContent = HINTS[S.tool];
+  showHover(null); $('hint').textContent = HINTS[S.tool];
+}
+document.querySelectorAll('.tool').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.kind)));
+$('clearInc').addEventListener('click', () => {
+  if (!S.incidents.length) { toast('No incidents to clear'); return; }
+  for (const i of S.incidents) i.until = S.t;
+  expireIncidents();
+  if (S.agent) agentReroute();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.tool !== 'none') setTool(S.tool); });
+$('map').addEventListener('click', (ev) => {
+  if (S.tool !== 'ride') { if (S.tool === 'none') select(null); return; }
+  const svg = $('map'); const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  let best = 0, bd = 1e9; for (const n of nodes) { if (!adj[n.id].length) continue; const d = Math.hypot(n.x - p.x, n.y - p.y); if (d < bd) { bd = d; best = n.id; } }
+  if (S.rideDraft == null) { S.rideDraft = best; $('hint').textContent = `Pickup at ${corner(best)}. Now click your destination.`; return; }
+  if (best === S.rideDraft) { toast('Pick a destination at least a block away'); return; }
+  const r = spawnRequest(S.rideDraft, best, true);
+  log({ src: 'exec', kind: 'system', tag: 'Request', head: `${r.id} You: ${corner(r.from)} → ${corner(r.to)}`, body: 'Your ride request is in the queue.' });
+  toast(`Ride requested from ${corner(r.from)}`);
+  S.rideDraft = null; setTool('ride');
+  S.timers.dispatch = S.t;
+});
+
+/* ---------------- loop ---------------- */
+let last = performance.now(), panelAcc = 0;
+function frame(now) {
+  const real = Math.min(0.1, (now - last) / 1000); last = now;
+  if (!S.paused && !document.hidden) {
+    let sim = real * SIM_PER_REAL * S.speed;
+    while (sim > 0) { const d = Math.min(2, sim); step(d); if (SHADOW) { S = SHADOW; step(d); S = MAIN; } sim -= d; }
+  }
+  renderMap(now);
+  panelAcc += real;
+  if (panelAcc > 0.25) { panelAcc = 0; renderFleet(); renderQueue(); renderMetrics(); renderPins(); renderIncidents(); renderChart(); $('clock').textContent = clockStr(S.t); }
+  requestAnimationFrame(frame);
+}
+
+/* ---------------- boot ---------------- */
+drawBase(); buildCars(); buildFleet(); setAgentUI(); fitTags();
+function resetWorld(seed) {
+  if (S.connecting) return;
+  SEED = seed; seedStreams(seed);
+  Object.assign(S, { t: 8 * 3600, agent: false, agentSince: null, reqs: [], nextReq: 101, nextInc: 1, hazIdx: 0, connectT: null, selected: null, rideDraft: null, waitSeries: [],
+    timers: { spawn: 8 * 3600 + 20, dispatch: 0, charge: 0, reroute: 0, repo: 0, sense: 0 }, periods: { exec: newPeriod(8 * 3600), agent: null } });
+  S.incidents.length = 0; SHADOW = null;
+  S.rph = 18 + Math.floor(rD() * 38); S.phase = rD() * 6.28;
+  S.hazards = makeHazards();
+  initCars(); recomputeTraffic();
+  feedEl.replaceChildren(); $('handshake').replaceChildren(); $('tune').open = true; setAgentUI(); select(null);
+  $('seedIn').value = seed;
+  $('seedLabel').textContent = `Seed ${seed} · about ${S.rph} riders/hr · ${S.hazards.filter((h) => h.t < 12 * 3600).length} hidden hazards by noon`;
+  try { history.replaceState(null, '', '#seed' + seed); } catch (err) { /* frame may refuse */ }
+  log({ src: 'exec', kind: 'system', tag: 'Start', head: `Millbrook fleet online: 10 robotaxis, seed ${seed}`, body: `About ${S.rph} riders an hour today. Crashes and jams are seeded and hidden: neither the Executor nor your agent knows about one until a car gets close.` });
+  spawnRequest(); spawnRequest();
+  for (let i = 0; i < 540; i++) step(2);
+  renderFleet(); renderQueue(); renderMetrics(); renderPins(); renderIncidents(); renderChart();
+}
+$('reseed').addEventListener('click', () => resetWorld(1000 + Math.floor(Math.random() * 9000)));
+$('seedIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') { const v = parseInt($('seedIn').value, 10); if (v >= 0 && v < 1e6) resetWorld(v); else toast('Seeds are whole numbers up to 6 digits'); } });
+resetWorld(SEED);
+{ const ms = $('mapscroll'); ms.scrollLeft = (ms.scrollWidth - ms.clientWidth) / 2; }
+window.__robro = { main: () => MAIN, shadow: () => SHADOW, run(n) { for (let i = 0; i < n; i++) { step(2); if (SHADOW) { S = SHADOW; step(2); S = MAIN; } } } };
+requestAnimationFrame(frame);
+})();
+</script>

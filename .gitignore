@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+mcp/runs/
+mcp/notes/
+review/harness_sim*.js
+review/out*.json
+*.zip
+.DS_Store

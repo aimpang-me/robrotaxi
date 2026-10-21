@@ -1,0 +1,13 @@
+# Render Blueprint (needs this folder in a Git repo). One instance: games live in memory.
+services:
+  - type: web
+    name: robrotaxi-hq
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    numInstances: 1
+    disk:
+      name: robrotaxi-data
+      mountPath: /data
+      sizeGB: 1

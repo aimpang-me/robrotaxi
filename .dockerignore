@@ -1,0 +1,8 @@
+*
+!index.html
+!index-3d.html
+!mcp
+!mcp/**
+mcp/node_modules
+mcp/runs
+mcp/notes

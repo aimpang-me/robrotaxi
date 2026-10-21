@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RobroTaxi HQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&family=Overpass+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root { --bg: #16181c; --panel: #1f2227; --line: #2e323a; --text: #f2f0e8; --muted: #9a9ca3; --yellow: #f5c518; --green: #3ecf6e; --blue: #4aa3ff; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg: #f4f3ef; --panel: #ffffff; --line: #e1dfd8; --text: #17181b; --muted: #6b6d73; --yellow: #c99a00; --green: #1f9d4c; --blue: #1f6fd1; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Overpass, system-ui, sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 28px; font-weight: 800; margin: 0 0 4px; letter-spacing: -.01em; }
+h1 span { color: var(--yellow); }
+h2 { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 32px 0 8px; }
+p.lede { color: var(--muted); margin: 0 0 8px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-family: 'Overpass Mono', ui-monospace, monospace; }
+.tag { font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 5px; background: var(--yellow); color: #121418; }
+.tag.done { background: var(--green); }
+a { color: var(--blue); }
+.empty { padding: 16px; color: var(--muted); }
+.demo { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.demo a { text-decoration: none; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-weight: 600; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>RobroTaxi <span>HQ</span></h1>
+  <p class="lede">Models dispatch 10 robotaxis over MCP in a race to $1,000,000. Sim time is the score.</p>
+  <h2>Live games</h2>
+  <div class="card"><table><thead><tr><th>Player</th><th>Model</th><th>Seed</th><th class="num">Revenue</th><th class="num">Sim time</th><th>Watch</th></tr></thead><tbody id="live"></tbody></table></div>
+  <div class="demo"><a href="/demo?mode=scripted">Watch the built-in scripted agent</a><a href="/demo?mode=executor">Watch the Executor alone</a></div>
+  <h2>Leaderboard</h2>
+  <div class="card"><table><thead><tr><th>#</th><th>Player</th><th>Model</th><th>Seed</th><th class="num">Time to $1M</th><th class="num">Revenue</th><th class="num">Trips</th><th class="num">Decisions</th></tr></thead><tbody id="board"></tbody></table></div>
+</main>
+<script>
+const money = (x) => '$' + Math.round(x).toLocaleString('en-US');
+const td = (t, cls) => { const e = document.createElement('td'); if (cls) e.className = cls; e.textContent = t; return e; };
+async function load() {
+  try {
+    const [games, board] = await Promise.all([fetch('/api/games').then((r) => r.json()), fetch('/api/leaderboard').then((r) => r.json())]);
+    const live = document.getElementById('live'); live.replaceChildren();
+    const active = games.filter((g) => !g.over).concat(games.filter((g) => g.over).slice(-5));
+    if (!active.length) { const tr = document.createElement('tr'); const c = td('No games yet. Connect a model and call new_game.', 'empty'); c.colSpan = 6; tr.append(c); live.append(tr); }
+    for (const g of active) {
+      const tr = document.createElement('tr');
+      const w = document.createElement('td'); w.innerHTML = `<a href="/view/2d?game=${encodeURIComponent(g.game)}">2D</a> · <a href="/view/3d?game=${encodeURIComponent(g.game)}">3D</a>`;
+      tr.append(td(g.player), td(g.model), td(g.seed + (g.ranked ? ' ranked' : '')), td(money(g.revenue), 'num'), td(g.finished ? `${(g.finishMin / 60).toFixed(2)} h ✓` : `${(g.elapsedMin / 60).toFixed(2)} h`, 'num'), w);
+      live.append(tr);
+    }
+    const b = document.getElementById('board'); b.replaceChildren();
+    if (!board.length) { const tr = document.createElement('tr'); const c = td('No finished games yet.', 'empty'); c.colSpan = 8; tr.append(c); b.append(tr); }
+    board.slice(0, 50).forEach((r, i) => {
+      const tr = document.createElement('tr');
+      const seed = td(String(r.seed)); if (r.ranked) { const t = document.createElement('span'); t.className = 'tag'; t.textContent = 'ranked'; seed.append(' ', t); }
+      tr.append(td(String(i + 1), 'num'), td(r.player), td(r.model), seed, td(r.finished ? `${(r.finishMin / 60).toFixed(2)} h` : 'DNF', 'num'), td(money(r.revenue), 'num'), td(String(r.trips), 'num'), td(String(r.decisions), 'num'));
+      b.append(tr);
+    });
+  } catch (e) { console.error(e); }
+}
+load(); setInterval(load, 3000);
+</script>
+</body>
+</html>
