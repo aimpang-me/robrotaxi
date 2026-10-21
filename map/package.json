@@ -1,0 +1,7 @@
+{
+  "name": "robrotaxi-map",
+  "private": true,
+  "description": "Builds the downtown Toronto map from OpenStreetMap data",
+  "scripts": { "fetch": "node fetch-osm.js", "cut": "node cut-pbf.js", "build": "node build.js" },
+  "dependencies": { "osm-pbf-parser": "2.3.0" }
+}
