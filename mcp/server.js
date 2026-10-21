@@ -164,13 +164,15 @@ function makeServer(base) {
   });
   tool('get_state', 'Fleet, waiting riders, known hazards, depots and score. Compact text by default; format "json" for structured data.', { include_riding: z.boolean().optional(), format: z.enum(['text', 'json']).optional() },
     ({ include_riding, format }) => { const st = need().state(include_riding); return format === 'json' ? JSON.stringify(st) : fmtState(st); });
-  tool('get_map', 'The city graph: intersections (node ids, corners, demand weight), roads (edge ids, km), depots and districts. JSON.', {}, () => JSON.stringify(need().map()));
+  tool('get_map', 'The city. With no arguments: size, HQ, depots, demand districts and landmarks with their node ids. With near (node id, or a district, landmark or depot name) and radius_km: the intersections and roads around it, nearest first. JSON.', {
+    near: z.union([z.string(), z.number()]).optional(), radius_km: z.number().min(0.1).max(3).optional(),
+  }, ({ near, radius_km }) => JSON.stringify(need().map({ near, radius_km })));
   tool('rider_options', 'For one waiting rider: the best cars ranked by pickup ETA, with empty km, battery at drop-off and whether a charger stays reachable. Uses only what the fleet knows.', {
     rider: z.string().describe('Rider id, e.g. R-142'), limit: z.number().int().min(1).max(10).optional(),
   }, ({ rider, limit }) => JSON.stringify(need().options(rider, limit)));
   tool('dispatch', 'Send a car to pick up a rider. A riding car takes the rider next, after its drop-off. A charging car is unplugged. Reassigns the rider if another car had it.', { car: carId, rider: z.string(), reason },
     ({ car, rider, reason }) => JSON.stringify(need().dispatch(car, rider, reason)));
-  tool('charge', 'Send a car to charge. depot: "Canal", "Harbor" or "best" (fastest known, counting queues). Any rider it was heading to goes back to the queue.', {
+  tool('charge', 'Send a car to charge. depot: a name from get_map (any unique start of it, e.g. "Tesla", "FLO", "RobroTaxi"), a node id, or "best" (fastest known, counting queues). Any rider it was heading to goes back to the queue.', {
     car: carId, depot: z.string().optional(), charge_to: z.number().min(10).max(100).optional().describe('Stop charging at this %, default 90'), reason,
   }, ({ car, depot, charge_to, reason }) => JSON.stringify(need().charge(car, depot || 'best', charge_to, reason)));
   tool('reposition', 'Move a free (or charging) car to an intersection to wait for demand.', { car: carId, node: z.number().int().describe('Intersection id from get_map'), reason },
@@ -237,11 +239,10 @@ function patchPage(file) {
   let html = fs.readFileSync(path.join(PAGES, file), 'utf8').replace(/\r\n/g, '\n'); // a Windows checkout may have CRLF
   const rep = (a, b) => { if (!html.includes(a)) throw new Error(`${file} changed: cannot find "${a.slice(0, 40)}"`); html = html.replace(a, b); };
   rep('function step(dt) {', 'function step(dt) {\n  if (window.__robroLive) return;');
-  rep('window.__robro = {', 'window.__robroLiveHooks = { main: () => MAIN, shadow: () => SHADOW, setShadow: (w) => { SHADOW = w; }, cloneWorld, nodes, edges, E, DEPOTS, recomputeTraffic, log, setAgentUI };\nwindow.__robro = {');
+  rep('window.__robro = {', 'window.__robroLiveHooks = { main: () => MAIN, shadow: () => SHADOW, setShadow: (w) => { SHADOW = w; }, cloneWorld, nodes, edges, E, edgeAt, BASE, DEPOTS, recomputeTraffic, log, setAgentUI,\n  // the 3D scene graph, for modules that add to it (null on the 2D page)\n  get scene() { return typeof scene === "undefined" ? null : scene; }, get W3() { return typeof W3 === "undefined" ? null : W3; } };\nwindow.__robro = {');
   // live.js eases each car between server updates and rounds corners; it hands the page a finished pose
   rep('function carPos(c) {', 'function carPos(c) {\n  if (c.livePos) return c.livePos;');
-  rep('let ox = 0, oy = 0;\n    if (c.seg < c.path.length - 1) {', 'let ox = 0, oy = 0;\n    if (c.livePos) { /* lane offset already in livePos */ } else if (c.seg < c.path.length - 1) {');
-  return html + '\n<script src="/live.js"></script>\n';
+  return html + '\n<script src="/live.js"></script>\n<script src="/traffic.js"></script>\n';
 }
 const page = (res, code, type, body) => { res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store' }); res.end(body); };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -268,7 +269,7 @@ function handleView(req, res, url) {
   const p = url.pathname;
   // the city data the demo pages load as map/toronto.js (relative to /view/2d and /view/3d)
   if (p === '/view/map/toronto.js' || p === '/map/toronto.js') return page(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(PAGES, 'map', 'toronto.js')));
-  if (p === '/live.js') return page(res, 200, 'text/javascript', fs.readFileSync(path.join(__dirname, 'viewer', 'live.js')));
+  if (p === '/live.js' || p === '/traffic.js') return page(res, 200, 'text/javascript', fs.readFileSync(path.join(__dirname, 'viewer', p.slice(1))));
   if (p === '/view/2d' || p === '/view/3d') {
     try { return page(res, 200, 'text/html; charset=utf-8', patchPage(p === '/view/2d' ? 'index.html' : 'index-3d.html')); } catch (e) { return page(res, 500, 'text/plain', e.message); }
   }

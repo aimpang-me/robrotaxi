@@ -71,7 +71,7 @@ class Game {
   }
   state(all) { this.toolCalls++; return J(this.api.state({ all })); }
   options(rider, limit) { this.toolCalls++; return J(this.api.options(rider, limit || 4)); }
-  map() { return J(this.api.mapInfo()); }
+  map(q) { return J(this.api.mapInfo(q || {})); }
   score() { return J(this.api.score()); }
   over() { return this.api.over(); }
   live(evFrom = 0) { return J(this.api.liveSnap(evFrom)); }

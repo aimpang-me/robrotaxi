@@ -30,6 +30,7 @@
 #robroHud .ctl button:hover{border-color:#f5c518}
 #robroHud .ctl button[aria-pressed=true]{background:#f5c518;color:#121418;border-color:#f5c518}
 #robroHud .lock{font-size:11px;opacity:.65;line-height:1.35}
+#robroWhy[hidden]{display:none}
 #robroWhy{position:fixed;right:16px;bottom:16px;z-index:9998;width:min(400px,calc(100vw - 32px));max-height:38vh;display:flex;flex-direction:column;
   border-radius:12px;background:rgba(18,20,24,.96);color:#f2f0e8;font:500 14px/1.4 Overpass,system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.12)}
 #robroWhy header{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.1)}
@@ -75,7 +76,7 @@
   document.body.append(why);
   const whyBody = why.querySelector('.body'), whyBtn = why.querySelector('button');
   whyBtn.addEventListener('click', () => { const m = why.dataset.min !== 'true'; why.dataset.min = String(m); whyBtn.textContent = m ? 'Show' : 'Hide'; });
-  const feed = []; let lastNote = null, lastMsg = performance.now(), finished = false;
+  let external = false; const feed = []; let lastNote = null, lastMsg = performance.now(), finished = false;
   const clk = (t) => String(Math.floor(t / 3600) % 24).padStart(2, '0') + ':' + String(Math.floor(t / 60) % 60).padStart(2, '0');
   function takeEvents(evs, meta) {
     let changed = false;
@@ -101,7 +102,7 @@
   }
   // when no update arrives, the sim is paused while the model thinks (the score counts sim time, not thinking time)
   setInterval(() => {
-    const el = $h('.think'); if (finished) { el.textContent = ''; return; }
+    const el = $h('.think'); if (finished || !external) { el.textContent = ''; return; }
     const idle = (performance.now() - lastMsg) / 1000;
     el.textContent = ctl.paused ? 'Paused by you' : idle > 1.5 ? `Dispatcher thinking… ${Math.floor(idle)}s (game clock stopped)` : '';
   }, 500);
@@ -133,44 +134,43 @@
     }
     Object.assign(m, { path, cum, from, to, t0: now, dur: Math.min(1000, gap * 1.15) });
   }
-  // pose at distance d: centreline point with rounded corners, heading, then the right-hand lane offset
+  // pose at distance d along m.path: follows each road's real polyline, with corners rounded
+  const LANE = 0.45; // right-hand lane offset in map units; the page adds it itself while a car is moving
+  const edgeOf = (path, i) => H.E(path[i], path[i + 1]);
   function poseOf(m, d) {
     const { path, cum } = m, N = H.nodes;
     if (path.length < 2) return null;
-    const i = segAt(m.cum, d), A = N[path[i]], B = N[path[i + 1]];
-    const L = cum[i + 1] - cum[i] || 1, f = Math.max(0, Math.min(1, (d - cum[i]) / L));
-    let x = A.x + (B.x - A.x) * f, y = A.y + (B.y - A.y) * f, dx = B.x - A.x, dy = B.y - A.y;
-    const R = 14;
-    // near the start node of this edge (coming out of a turn) or near its end node (going into one)
-    const corner = (j) => { // corner at path[j], between edge j-1 and edge j
+    const i = segAt(cum, d), e = edgeOf(path, i);
+    let p = e ? H.edgeAt(e, path[i], Math.max(0, d - cum[i])) : { x: N[path[i]].x, y: N[path[i]].y, ang: 0 };
+    const R = 1.2; // corner radius, units (12 m)
+    const corner = (j) => { // corner at path[j], between road j-1 and road j
       if (j <= 0 || j >= path.length - 1) return null;
-      const P0n = N[path[j - 1]], C = N[path[j]], P2n = N[path[j + 1]];
-      const ax = C.x - P0n.x, ay = C.y - P0n.y, bx = P2n.x - C.x, by = P2n.y - C.y, la = Math.hypot(ax, ay) || 1, lb = Math.hypot(bx, by) || 1;
-      const dot = (ax * bx + ay * by) / la / lb; if (dot > 0.98 || dot < -0.98) return null;
-      const ra = Math.min(R, la / 2), rb = Math.min(R, lb / 2), s0 = cum[j] - ra, s1 = cum[j] + rb;
+      const ei = edgeOf(path, j - 1), eo = edgeOf(path, j); if (!ei || !eo) return null;
+      const ra = Math.min(R, ei.len / 2), rb = Math.min(R, eo.len / 2), s0 = cum[j] - ra, s1 = cum[j] + rb;
       if (d < s0 || d > s1) return null;
-      const u = d < cum[j] ? 0.5 * (d - s0) / ra : 0.5 + 0.5 * (d - cum[j]) / rb;
-      const p0x = C.x - ax / la * ra, p0y = C.y - ay / la * ra, p2x = C.x + bx / lb * rb, p2y = C.y + by / lb * rb, v = 1 - u;
-      return { x: v * v * p0x + 2 * v * u * C.x + u * u * p2x, y: v * v * p0y + 2 * v * u * C.y + u * u * p2y,
-        dx: 2 * v * (C.x - p0x) + 2 * u * (p2x - C.x), dy: 2 * v * (C.y - p0y) + 2 * u * (p2y - C.y) };
+      const A = H.edgeAt(ei, path[j - 1], ei.len - ra), A2 = H.edgeAt(ei, path[j - 1], ei.len), B = H.edgeAt(eo, path[j], rb), B2 = H.edgeAt(eo, path[j], 0), C = N[path[j]];
+      let turn = B2.ang - A2.ang; while (turn > 180) turn -= 360; while (turn < -180) turn += 360;
+      if (Math.abs(turn) < 8) return null;
+      const u = d < cum[j] ? 0.5 * (d - s0) / ra : 0.5 + 0.5 * (d - cum[j]) / rb, v = 1 - u;
+      return { x: v * v * A.x + 2 * v * u * C.x + u * u * B.x, y: v * v * A.y + 2 * v * u * C.y + u * u * B.y,
+        ang: Math.atan2(2 * v * (C.y - A.y) + 2 * u * (B.y - C.y), 2 * v * (C.x - A.x) + 2 * u * (B.x - C.x)) * 180 / Math.PI };
     };
-    const r = corner(i) || corner(i + 1);
-    if (r) ({ x, y, dx, dy } = r);
-    return { x, y, ang: Math.atan2(dy, dx) * 180 / Math.PI };
+    return corner(i) || corner(i + 1) || p;
   }
   function place(c, m, now, dt) {
     const d = m.from + (m.to - m.from) * Math.min(1, (now - m.t0) / m.dur);
     const p = poseOf(m, d);
-    const moving = p && d < m.cum[m.cum.length - 1] - 0.01;
+    const moving = !!p && d < m.cum[m.cum.length - 1] - 0.01;
     if (p) m.ang = p.ang;
-    // ease onto and off the lane when a car pulls away from or stops at an intersection
+    const i = m.path.length > 1 ? segAt(m.cum, d) : 0, e = m.path.length > 1 ? edgeOf(m.path, i) : null;
+    // ease onto and off the lane when a car pulls away from or stops at an intersection. The page adds the full lane
+    // offset itself while c.seg is mid-road, so livePos carries only the difference.
     m.off += ((moving ? 1 : 0) - m.off) * Math.min(1, dt * 6);
+    const lane = e && e.oneway ? 0 : LANE, pageLane = moving ? lane : 0, a = (m.ang || 0) * Math.PI / 180, k = lane * m.off - pageLane;
     let x, y;
     if (p) ({ x, y } = p); else { const n = H.nodes[m.path[0]]; x = n.x; y = n.y; }
-    const a = (m.ang || 0) * Math.PI / 180;
-    c.livePos = { x: x - Math.sin(a) * 5 * m.off, y: y + Math.cos(a) * 5 * m.off, ang: m.ang ?? c.ang };
-    const i = m.path.length > 1 ? segAt(m.cum, d) : 0, q = m.path.length > 1 ? d - m.cum[i] : 0;
-    c.path = m.path; c.seg = moving ? i : m.path.length - 1; c.prog = moving ? q : 0;
+    c.livePos = { x: x - Math.sin(a) * k, y: y + Math.cos(a) * k, ang: m.ang ?? c.ang };
+    c.path = m.path; c.seg = moving ? i : m.path.length - 1; c.prog = moving ? d - m.cum[i] : 0;
   }
   let lastFrame = performance.now();
   function animate(now) {
@@ -202,7 +202,7 @@
   }
   let announced = false;
   function apply(meta, snap) {
-    lastMsg = performance.now(); finished = !!(snap.score.finished || snap.score.outOfTime);
+    lastMsg = performance.now(); finished = !!(snap.score.finished || snap.score.outOfTime); external = meta.mode === 'external'; why.hidden = !external;
     const S = H.main();
     Object.assign(S, { t: snap.t, agent: snap.agent, agentSince: snap.agentSince, connectT: snap.connectT, rph: snap.rph, hazIdx: snap.hazIdx, rush: snap.rush, paused: false });
     const at = performance.now(); if (lastAt && at - lastAt < 1500) gap = gap * 0.8 + (at - lastAt) * 0.2; lastAt = at;

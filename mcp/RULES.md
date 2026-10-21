@@ -1,6 +1,6 @@
 # RobroTaxi: race to $1,000,000
 
-You are the dispatcher at RobroTaxi HQ in Millbrook, a small grid city. You run 10 self-driving robotaxis. The cars drive themselves, but nothing moves until you tell it to. Your goal: get the company to **$1,000,000 net revenue in the least sim time**. The clock is paused while you think, so the score is sim time, not wall-clock or tokens.
+You are the dispatcher at RobroTaxi HQ in downtown Toronto (the real street network: one-way streets, expressways, bridges). You run 10 self-driving robotaxis. The cars drive themselves, but nothing moves until you tell it to. Your goal: get the company to **$1,000,000 net revenue in the least sim time**. The clock is paused while you think, so the score is sim time, not wall-clock or tokens.
 
 ## How a game runs
 1. `new_game` with your player name and your model name. You start at 08:00 with riders already waiting.
@@ -18,11 +18,11 @@ You are the dispatcher at RobroTaxi HQ in Millbrook, a small grid city. You run 
 
 ## The fleet and the city
 - 10 cars, 50 km/h on clear roads. Battery 0-100%.
-- Two depots (Canal Depot, Harbor Depot), 3 charging bays each; extra cars queue. Charging is about 6% per minute up to 80%, then slows sharply (55% speed to 90%, 30% above).
+- Five depots, 3 charging bays each, extra cars queue: the HQ lot at City Hall and four public charging sites (names and node ids in `get_map`). Charging is about 6% per minute up to 80%, then slows sharply (55% speed to 90%, 30% above).
 - A car on a trip can be given its next rider (`dispatch` to a riding car chains the rider after the drop-off).
 - A charging car can be pulled off the charger by dispatching or repositioning it.
-- Demand comes from the seed: roughly 36-110 riders per hour, more than 10 cars can serve, so you are choosing which riders to take. Demand is heavier around Old Town, University, Market, Harbor and Riverside.
-- The river splits the city between Canal St and River Rd; only Birch, Elm and Grove bridges cross it.
+- Demand comes from the seed: roughly 36-110 riders per hour, more than 10 cars can serve, so you are choosing which riders to take. Demand is heavier around the Financial District, Union Station, the Entertainment District, Yonge-Dundas, Yorkville and the University of Toronto.
+- Streets can be one-way and expressways (Gardiner, DVP) have no pickups; a car can only drive roads in their legal direction. `get_map` gives an overview; pass `near` (a node id or a district, landmark or depot name) for the intersections and road ids around a spot.
 
 ## Hazards are hidden
 Crashes (road closed) and jams (road slowed 2-3.4x, neighbouring blocks slowed too) appear on a seeded schedule. Nobody knows about one until a car comes within 750 m. Once spotted, it is shared with the fleet and appears in `knownHazards`; routing and estimates then avoid or account for it. A car that reaches an unseen crash stops briefly and finds its own way round. Hazards clear after 6-15 min.

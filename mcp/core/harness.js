@@ -89,14 +89,31 @@ function state(opts = {}) {
     depots: DEPOTS.map(depotView),
   };
 }
-function mapInfo() {
-  return {
-    note: 'Grid city, 1 px = 10 m. Node ids are intersections (row*8+col). Cars drive at 50 km/h on clear roads; known jams slow a road 2-3.4x; crashes close it. Rows 2 and 3 are split by the river, crossed only by the bridges.',
-    nodes: nodes.filter((n) => adj[n.id].length).map((n) => ({ id: n.id, corner: corner(n.id), x: n.x, y: n.y, area: areaOf(n.id), demandWeight: r1(nodeWeight[n.id]) })),
-    edges: edges.map((e) => ({ id: e.id, a: e.a, b: e.b, name: e.name, km: r1(e.len / 100), rushHour: e.rushy })),
-    depots: DEPOTS.map((d) => ({ name: d.name, node: d.node, at: corner(d.node), bays: BAYS })),
-    districts: DISTRICTS.map((d) => ({ name: d.name, node: d.node, demandWeight: d.w })),
+// Overview by default (the whole graph is ~300 KB, far too big for a model). Pass near (a node id, district, landmark or depot name)
+// to list intersections and roads around it, nearest first.
+function mapInfo(q = {}) {
+  const num = (x) => (x == null ? NaN : +x);
+  const out = {
+    note: `Downtown Toronto from OpenStreetMap, 1 unit = 10 m (${r1(MAP_W / 100)} x ${r1(MAP_H / 100)} km). Intersections have node ids; roads have edge ids and may be one-way. Cars drive at the speed limit times about 0.7 (0.9 on expressways), slowed by known jams; crashes close a road. Pickups and drop-offs are never on expressways.`,
+    hq: { name: DEPOTS[0].name, node: DEPOTS[0].node, at: corner(DEPOTS[0].node) },
+    depots: DEPOTS.map((d) => ({ name: d.name, node: d.node, at: corner(d.node), bays: d.bays })),
+    districts: DISTRICTS.map((d) => ({ name: d.name, node: d.node, at: corner(d.node), demandWeight: d.w })),
+    landmarks: LANDMARK_NODES.map((l) => ({ name: l.name, node: l.node, at: corner(l.node) })),
+    size: { intersections: nodes.filter((n) => adj[n.id].length).length, roads: edges.length },
   };
+  if (q.near == null) { out.howToZoom = 'Call get_map with near (a node id, or a district, landmark or depot name) and optional radius_km (default 0.8, max 3) to list the intersections and roads around it.'; return out; }
+  let c = null, id = num(q.near);
+  if (Number.isInteger(id) && nodes[id]) c = nodes[id];
+  else { const k = String(q.near).toLowerCase(); const hit = [...DISTRICTS, ...LANDMARK_NODES, ...DEPOTS].find((d) => d.name.toLowerCase().includes(k)); if (hit) c = nodes[hit.node]; }
+  if (!c) throw new Error(`Unknown place "${q.near}". Use a node id, or a district, landmark or depot name from the overview.`);
+  const rad = Math.max(0.1, Math.min(3, num(q.radius_km) || 0.8)) * 100;
+  const near = nodes.filter((n) => adj[n.id].length && Math.hypot(n.x - c.x, n.y - c.y) <= rad).sort((p, q2) => Math.hypot(p.x - c.x, p.y - c.y) - Math.hypot(q2.x - c.x, q2.y - c.y)).slice(0, 120);
+  const set = new Set(near.map((n) => n.id));
+  out.around = { node: c.id, at: corner(c.id), radiusKm: r1(rad / 100), shown: near.length };
+  out.nodes = near.map((n) => `${n.id} ${corner(n.id)} (${r1(n.x / 100)}, ${r1(n.y / 100)} km)`);
+  out.edges = edges.filter((e) => set.has(e.a) || set.has(e.b)).slice(0, 400).map((e) => `e${e.id} ${e.a}${e.oneway ? '->' : '<->'}${e.b} ${e.name} ${r1(e.len / 100)}km ${e.kmh}km/h${e.motorway ? ' expressway' : ''}${e.bridge ? ' bridge' : ''}`);
+  delete out.howToZoom; delete out.depots; delete out.districts; delete out.landmarks; delete out.size;
+  return out;
 }
 // candidate cars for a rider, using only what the fleet knows (seen hazards, known traffic)
 function options(riderId, limit = 4) {

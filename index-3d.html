@@ -591,6 +591,23 @@ edges.forEach((e) => {
   e.mx = m.x; e.my = m.y;
   e.rushy = e.motorway || DISTRICTS.some((d) => d.w >= 1.5 && Math.hypot(m.x - d.x, m.y - d.y) < 65);
 });
+// Background traffic. Other vehicles are not simulated one by one: each road has a share of the day's load (heavier on
+// bigger roads near the busy districts) and the load follows the time of day, so every car on it slows. The views draw
+// vehicles from the same numbers (mcp/viewer/traffic.js), so a slow road always has a visible reason.
+const DIST_PEAK = Math.max(...nodes.map((n) => DISTRICTS.reduce((s, d) => s + d.w * Math.exp(-((n.x - d.x) ** 2 + (n.y - d.y) ** 2) / (2 * 110 * 110)), 0)));
+edges.forEach((e) => {
+  const g = DISTRICTS.reduce((s, d) => s + d.w * Math.exp(-((e.mx - d.x) ** 2 + (e.my - d.y) ** 2) / (2 * 110 * 110)), 0) / DIST_PEAK;
+  const cls = e.motorway ? 0.8 : e.kmh >= 50 ? 0.75 : e.kmh >= 40 ? 0.55 : 0.25;
+  e.cong = cls * (0.3 + 0.7 * Math.min(1, g));
+});
+// 0..1 share of peak load: morning peak, a lunchtime bump, evening peak, quiet nights
+function loadAt(t) {
+  const h = (t / 3600) % 24, g = (c, w) => Math.exp(-((h - c) ** 2) / (2 * w * w));
+  return Math.min(1, 0.1 + 0.55 * g(8.4, 1.1) + 0.35 * g(12.5, 2) + 0.65 * g(17.2, 1.4));
+}
+const dayFactor = (seed) => { const x = Math.sin(seed * 12.9898) * 43758.5453; return 0.9 + 0.2 * (x - Math.floor(x)); };
+let trafficAt = 0;
+const JAM_AT = 1.95;      // above this a road counts as jammed (incidents and the queues behind them)
 function areaOf(n) {
   let best = null, bd = 1e9;
   for (const d of DISTRICTS) { const dd = Math.hypot(nodes[n].x - d.x, nodes[n].y - d.y); if (dd < bd) { bd = dd; best = d; } }
@@ -1076,19 +1093,32 @@ function agentReposition() {
 
 /* ---------------- incidents ---------------- */
 function recomputeTraffic() {
+  trafficAt = S.t + 60;
   applyIncidents(edges.map(() => 0), false);
   applyIncidents(null, true);
 }
 function applyIncidents(_, belief) {
   const T = belief ? 'kTraffic' : 'traffic', B = belief ? 'kBlocked' : 'blocked';
-  for (const e of edges) { e[T] = S.rush && e.rushy ? 1.6 : 1; e[B] = false; }
+  // the fleet sees live traffic, so the baseline is in both; only incidents stay hidden until a car is near
+  const lam = Math.min(1, loadAt(S.t) + (S.rush ? 0.35 : 0)), k = lam * dayFactor(SEED);
+  for (const e of edges) { e[T] = 1 + e.cong * k; e[B] = false; }
+  // a queue backs up behind an incident, onto the roads that feed it
+  const backUp = (e, f1, f2, f3) => {
+    let ring = [e.a, e.b]; const seen = new Set([e.id]);
+    for (const m of [f1, f2, f3]) {
+      const next = [];
+      for (const n of ring) for (const { to, e: f } of radj[n]) if (!seen.has(f.id)) { seen.add(f.id); f[T] = Math.max(f[T], m); next.push(to); }
+      ring = next;
+    }
+  };
   for (const inc of MAIN.incidents) {
     if (belief && !inc.seen) continue;
     const e = inc.edge;
-    if (inc.type === 'crash') { e[B] = true; }
+    if (inc.type === 'crash') { e[B] = true; backUp(e, 2.6, 2.0, 1.5); }
     else {
       e[T] = Math.max(e[T], 3.4);
       for (const f of e.nbr) f[T] = Math.max(f[T], 2.0);
+      backUp(e, 2.0, 1.6, 1.3);
     }
   }
 }
@@ -1142,6 +1172,7 @@ function expireIncidents() {
 /* ---------------- sim step ---------------- */
 function step(dt) {
   S.t += dt;
+  if (!S.shadow && S.t >= trafficAt) recomputeTraffic();
   const T = S.timers;
   if (!S.shadow && S.t >= T.spawn) {
     spawnRequest();
@@ -1967,7 +1998,7 @@ function renderIncidents() {
   if (!has3D) return;
   clearGroup(trafficGroup); clearGroup(incGroup);
   for (const e of edges) {
-    if (e.traffic <= 1.05 || e.blocked) continue;
+    if (e.traffic <= JAM_AT || e.blocked) continue; // only real jams are painted; everyday load shows as vehicles
     const m = new THREE.Mesh(edgeStrip(e, ROAD_W(e) * M3, 0.6), MAT.overlayOrange.clone()); m.userData.ownGeo = true;
     m.material.opacity = Math.min(0.75, (e.traffic - 1) / 2.6); trafficGroup.add(m);
   }

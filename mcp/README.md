@@ -65,10 +65,10 @@ The viewer patches the demo pages in memory when serving them; it does not edit 
 | `get_rules` | Rules, fares, costs, scoring |
 | `new_game(player, model, seed?)` | Start a game. Player is required; model is self-reported. Default seed is ranked seed 1101 |
 | `get_state(format?)` | Cars, waiting riders with fares and cancel timers, known hazards, depots, score. Text, or `json` |
-| `get_map` | Intersections, roads (edge ids), depots, demand hotspots |
+| `get_map(near?, radius_km?)` | Intersections, roads (edge ids), depots, demand hotspots |
 | `rider_options(rider)` | Best cars for a rider: pickup ETA, empty km, battery at drop-off, charger reachable |
 | `dispatch(car, rider, reason)` | Assign; chains onto a riding car; unplugs a charging car; reassigns if needed |
-| `charge(car, depot?, charge_to?, reason)` | Send to Canal, Harbor or the best depot |
+| `charge(car, depot?, charge_to?, reason)` | Send to a named depot or the best one |
 | `reposition(car, node, reason)` | Move a free car to wait somewhere |
 | `reroute(car, avoid_edges?, reason)` | Re-plan a moving car on known traffic, optionally avoiding roads |
 | `release(car, reason)` | Hand a car's riders back to the queue |
