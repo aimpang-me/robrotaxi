@@ -1656,7 +1656,7 @@ function faceAtlas() {
 // inside a patience ring that fills toward the 15 min cancel (green while the fare is full,
 // orange, then red and pulsing); riders aboard sit on their car's roof with a yellow ring.
 // Boarding, giving up and drop-off animate. Reads only r.id, r.from, r.t0, r.status, r.car.
-const AV = { max: 96, mesh: null, seen: new Map(), fx: [], board: new Map() };
+const AV = { max: 96, k: 1, mesh: null, seen: new Map(), fx: [], board: new Map() }; // k scales sizes and heights to the world units; set it before initAvatars()
 const RING_COL = { calm: COL.green, impatient: COL.orange, angry: COL.red, riding: COL.yellow, cancel: '#8a877f', happy: COL.green };
 const RING_IDX = Object.fromEntries(Object.keys(RING_COL).map((k, i) => [k, i]));
 const spotOf = (n) => W3(nodes[n].x + 12, nodes[n].y - 12); // over the pickup pin
@@ -1668,10 +1668,10 @@ function initAvatars() {
   AV.pos = at('aPos', 3); AV.cell = at('aCell', 2); AV.ring = at('aRing', 3); AV.size = at('aSize', 1); // ring: filled fraction, colour, alpha
   geo.instanceCount = 0;
   const mat = new THREE.ShaderMaterial({
-    uniforms: { atlas: { value: tex }, cols: { value: Object.values(RING_COL).map((c) => new THREE.Color(c)) } },
-    vertexShader: `attribute vec3 aPos; attribute vec2 aCell; attribute vec3 aRing; attribute float aSize; uniform vec3 cols[6];
+    uniforms: { far: { value: 380 * AV.k }, atlas: { value: tex }, cols: { value: Object.values(RING_COL).map((c) => new THREE.Color(c)) } },
+    vertexShader: `attribute vec3 aPos; attribute vec2 aCell; attribute vec3 aRing; attribute float aSize; uniform vec3 cols[6]; uniform float far;
       varying vec2 vP; varying vec2 vCell; varying vec2 vRing; varying vec3 vCol;
-      void main() { vec4 mv = modelViewMatrix * vec4(aPos, 1.0); mv.xy += position.xy * aSize * max(1.0, -mv.z / 380.0);
+      void main() { vec4 mv = modelViewMatrix * vec4(aPos, 1.0); mv.xy += position.xy * aSize * max(1.0, -mv.z / far);
         gl_Position = projectionMatrix * mv; vP = position.xy; vCell = aCell; vRing = aRing.xz; vCol = cols[int(aRing.y + 0.5)]; }`,
     fragmentShader: `uniform sampler2D atlas; varying vec2 vP; varying vec2 vCell; varying vec2 vRing; varying vec3 vCol;
       void main() { float r = length(vP); if (r > 1.0) discard; vec4 c;
@@ -1688,7 +1688,7 @@ function renderAvatars(now) {
   let n = 0;
   const put = (x, y, z, f, mood, frac, ring, alpha, size) => {
     if (n >= AV.max) return; const [c, rw] = faceCell(f, mood);
-    AV.pos.setXYZ(n, x, y, z); AV.cell.setXY(n, c, rw); AV.ring.setXYZ(n, frac, RING_IDX[ring], alpha); AV.size.setX(n, size); n++;
+    AV.pos.setXYZ(n, x, y * AV.k, z); AV.cell.setXY(n, c, rw); AV.ring.setXYZ(n, frac, RING_IDX[ring], alpha); AV.size.setX(n, size * AV.k); n++;
   };
   const t = now / 1000, simple = reduceMotion || ART.quality === 'low', live = new Map(), ease = (k) => 1 - Math.pow(1 - k, 3), stack = new Map();
   for (const r of S.reqs) {
