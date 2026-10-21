@@ -93,6 +93,7 @@ Reference results on the ranked seeds (sim hours to $1M, DNF = not reached in 24
 ```sh
 npm test                                     # spawns the server over stdio and plays seed 1101 to the finish
 MCP_URL=http://localhost:8787/mcp npm test   # same, against a running HTTP server
+CALL_DELAY_MS=80 MCP_URL=https://<your-host>/mcp npm test   # against a hosted server, under its rate limit
 ```
 
 The test client is a scripted stub (no LLM) that uses only the MCP tools.

@@ -11,7 +11,9 @@ const seed = +(process.argv[2] || 1101), player = process.argv[3] || 'Test bot',
   const transport = process.env.MCP_URL ? new StreamableHTTPClientTransport(new URL(process.env.MCP_URL)) : new StdioClientTransport({ command: process.execPath, args: [path.join(__dirname, '..', 'server.js'), '--view-port', process.env.VIEW_PORT || '0'], stderr: 'inherit', env: { ...process.env } });
   const client = new Client({ name: 'robrotaxi-e2e', version: '1.0.0' });
   await client.connect(transport);
-  const call = async (name, args = {}) => { const r = await client.callTool({ name, arguments: args }); const t = r.content.map((c) => c.text).join('\n'); if (r.isError) throw new Error(t); return t; };
+  // CALL_DELAY_MS spaces calls out so a hosted server's rate limit (15/s per IP by default) is respected
+  const delay = +process.env.CALL_DELAY_MS || 0;
+  const call = async (name, args = {}) => { if (delay) await new Promise((r) => setTimeout(r, delay)); const r = await client.callTool({ name, arguments: args }); const t = r.content.map((c) => c.text).join('\n'); if (r.isError) throw new Error(t); return t; };
   const tools = (await client.listTools()).tools.map((t) => t.name);
   console.log('tools:', tools.join(', '));
   const rules = await call('get_rules'); console.log('rules:', rules.split('\n')[0]);
