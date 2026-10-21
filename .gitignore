@@ -6,3 +6,4 @@ review/harness_sim*.js
 review/out*.json
 *.zip
 .DS_Store
+.robro-session

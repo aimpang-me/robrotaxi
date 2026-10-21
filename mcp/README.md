@@ -39,6 +39,14 @@ node server.js --http 8787
 ```
 MCP endpoint: `http://localhost:8787/mcp` (Streamable HTTP). Each MCP session plays its own game. To reach it from a hosted client, put it behind a tunnel with HTTPS.
 
+### From a shell (agents that can run commands but not add MCP servers)
+```sh
+node play-cli.js tools
+node play-cli.js new_game '{"player":"Alvin","model":"my-model"}'
+node play-cli.js act @turn.json
+```
+No dependencies. Talks to the live server unless `ROBRO_URL` is set (e.g. `http://localhost:8787/mcp`). The session is kept in `.robro-session` in the current folder. A ready-made agent prompt is in [../deploy/grok-play-prompt.md](../deploy/grok-play-prompt.md).
+
 ## Watch a game
 
 The server also runs a viewer (stdio mode: port 8787, change with `--view-port`, `0` turns it off).
