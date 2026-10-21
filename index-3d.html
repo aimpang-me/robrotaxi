@@ -1757,8 +1757,8 @@ function renderMap(now) {
   for (const c of S.cars) {
     const m = carMeshes.get(c);
     const p = carPos(c);
-    let ox = 0, oy = 0;
     let ce = null;
+    let ox = 0, oy = 0;
     if (c.seg < c.path.length - 1) { ce = E(c.path[c.seg], c.path[c.seg + 1]); const a = p.ang * Math.PI / 180, o = ce && ce.oneway ? 0 : LANE; ox = -Math.sin(a) * o; oy = Math.cos(a) * o; }
     let da = p.ang - c.ang; while (da > 180) da -= 360; while (da < -180) da += 360;
     c.ang += da * 0.25; c.x = p.x; c.y = p.y;
