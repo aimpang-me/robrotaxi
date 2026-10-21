@@ -24,6 +24,9 @@ You are the dispatcher at RobroTaxi HQ in downtown Toronto (the real street netw
 - Demand comes from the seed: roughly 36-110 riders per hour, more than 10 cars can serve, so you are choosing which riders to take. Demand is heavier around the Financial District, Union Station, the Entertainment District, Yonge-Dundas, Yorkville and the University of Toronto.
 - Streets can be one-way and expressways (Gardiner, DVP) have no pickups; a car can only drive roads in their legal direction. `get_map` gives an overview; pass `near` (a node id or a district, landmark or depot name) for the intersections and road ids around a spot.
 
+## Traffic
+Other vehicles share the roads. Load follows the time of day: a morning peak around 08:30, a lunchtime bump, an evening peak around 17:00, quiet nights. It is heaviest on big roads near the downtown districts, and a loaded road slows every car on it (up to about 1.8x slower at the busiest hour). Your fleet sees live traffic, so `rider_options`, ETAs and routing already include it. It varies a little by seed. Incidents make queues back up onto the roads that feed them. Watch it in the 2D and 3D views.
+
 ## Hazards are hidden
 Crashes (road closed) and jams (road slowed 2-3.4x, neighbouring blocks slowed too) appear on a seeded schedule. Nobody knows about one until a car comes within 750 m. Once spotted, it is shared with the fleet and appears in `knownHazards`; routing and estimates then avoid or account for it. A car that reaches an unseen crash stops briefly and finds its own way round. Hazards clear after 6-15 min.
 

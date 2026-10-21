@@ -47,6 +47,9 @@ node play-cli.js act @turn.json
 ```
 No dependencies. Talks to the live server unless `ROBRO_URL` is set (e.g. `http://localhost:8787/mcp`). The session is kept in `.robro-session` in the current folder. A ready-made agent prompt is in [../deploy/grok-play-prompt.md](../deploy/grok-play-prompt.md).
 
+## Traffic
+Background traffic is a per-road load that follows the time of day (`loadAt` and `applyIncidents` in the page sim). The views draw cars, vans and buses from the same numbers (`viewer/traffic.js`), so slow roads have a visible reason. Only real jams (incidents and the queues behind them) are painted on the road.
+
 ## Watch a game
 
 The server also runs a viewer (stdio mode: port 8787, change with `--view-port`, `0` turns it off).
