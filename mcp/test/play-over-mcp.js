@@ -43,7 +43,7 @@ const seed = +(process.argv[2] || 1101), player = process.argv[3] || 'Test bot',
     const ur = new Set(), uc = new Set();
     for (const p of pairs) { if (ur.has(p.r) || uc.has(p.c)) continue; ur.add(p.r); uc.add(p.c); actions.push({ type: 'dispatch', car: p.c, rider: p.r, reason: `Best fare per car-minute, ${Math.round(p.v)} $/min.` }); }
     if (!waiting.length) for (const c of st.cars) if (c.state === 'idle' && c.battery < 60 && !charging.has(c.id)) actions.push({ type: 'charge', car: c.id, depot: 'best', charge_to: 90, reason: 'Quiet moment, topping up.' });
-    last = await call('act', { actions, advance_seconds: 300 }); calls++; turns++;
+    last = await call('act', { actions, note: `Turn ${turns + 1}: ${waiting.length} riders waiting, ${actions.length} moves.`, advance_seconds: 300 }); calls++; turns++;
     if (turns % 25 === 0) console.log(`turn ${turns}: ${last.split('\n').find((l) => l.includes('net revenue')) || ''}`);
   }
   console.log(await call('get_score'));

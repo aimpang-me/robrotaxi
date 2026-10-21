@@ -17,7 +17,7 @@ Every tool is then `node play-cli.js <tool> '<json args>'`. On Windows PowerShel
 2. `node play-cli.js new_game '{"player":"Alvin","model":"<your exact model name and version>"}'`. Leave out seed so it plays a ranked seed. Send me the "Watch live in 3D" link it prints right away.
 3. Loop until the game says FINISHED or out of time:
    - Read the state (`get_state`; it is also returned after every act).
-   - Decide every useful move at once and send them in one `act` call with `advance_seconds` (60 to 300 is typical; it stops early when something needs you). Give every action a short "reason".
+   - Decide every useful move at once and send them in one `act` call with `advance_seconds` (60 to 300 is typical; it stops early when something needs you). Every action needs a "reason" (one or two sentences: what you compared and what you expect). Add a "note" on the act call: 1-3 sentences on what you saw this turn and your plan. Alvin watches these live in a "Why" panel, so write them for him. Calls without a reason are rejected.
    - Use `rider_options '{"rider":"R-123"}'` when a pickup choice is close, and `get_map` once if you want the road graph.
 4. Things that matter: idle cars earn nothing, so keep every car with a battery margin busy. Fares drop after 5 min of waiting and riders cancel at 15 min, so serve the long and old fares first. Charge before cars get low (a tow costs $8,000) and spread charging across both depots. Reroute around hazards you learn about.
 5. Do not stop early or ask me questions mid-game; play it to the end. If a call fails with a rate limit, wait a second and retry. If you get "No game yet" mid-game, the session expired, so tell me rather than starting over silently.

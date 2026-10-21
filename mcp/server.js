@@ -101,22 +101,29 @@ function fmtBoard(rows, n = 20) {
 
 /* ---------------- pacing: real-time while someone is watching ---------------- */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const SPEEDS = [0.25, 0.5, 1, 2, 4];
 async function pacedAdvance(g, seconds, stop) {
   const watched = () => PACE > 0 && (watchers.get(g.id)?.size || 0) > 0;
-  if (!watched()) return g.advance(seconds, stop);
+  if (!watched()) { const r = g.advance(seconds, stop); g.lastAdvEnd = Date.now(); return r; }
   g.toolCalls++;
-  // small slices so viewers get about 10 updates a second; stop reasons carry across slices
-  const total = Math.max(2, Math.min(1800, +seconds || 120)), slice = Math.max(2, PACE / 10);
+  const total = Math.max(2, Math.min(1800, +seconds || 120));
+  // Keep the view moving while the model thinks: stretch this advance over about as long as the last think took
+  // (3 to 20 s), but never slower than 1/8 of the base pace. Only the waiting changes; the sim result is identical.
+  const thinkS = Math.max(3, Math.min(20, (Date.now() - g.lastAdvEnd) / 1000));
+  const basePace = Math.max(Math.min(PACE, 8), Math.min(PACE, total / thinkS));
   let done = 0; const why = [], merged = { advancedS: 0, stoppedFor: [], events: [] };
   while (done < total && !g.over()) {
-    const t0 = Date.now();
+    let held = 0; while (g.ctl.paused && watched() && held < 300000) { await sleep(200); held += 200; } // viewer pause, at most 5 min
+    if (held >= 300000) { g.ctl.paused = false; g.emit(); }
+    const pace = basePace * g.ctl.speed, slice = Math.max(2, pace / 10), t0 = Date.now();
     const r = g.advance(Math.min(slice, total - done), stop, { minS: Math.max(0, 20 - done), why });
     if (r.over) return r;
     merged.advancedS += r.advancedS; merged.events.push(...r.events); done += r.advancedS;
     if (stop && why.length && done >= 20) { merged.stoppedFor = why.slice(0, 8); break; }
-    if (watched()) await sleep(Math.max(0, 1000 * r.advancedS / PACE - (Date.now() - t0)));
+    if (watched()) await sleep(Math.max(0, 1000 * r.advancedS / pace - (Date.now() - t0)));
   }
   if (g.over()) g.finish();
+  g.lastAdvEnd = Date.now();
   return merged;
 }
 
@@ -134,7 +141,8 @@ function makeServer(base) {
   const tool = (name, description, shape, fn) => server.registerTool(name, { description, inputSchema: shape }, async (args) => {
     try { return { content: [{ type: 'text', text: await fn(args || {}) }] }; } catch (e) { return { content: [{ type: 'text', text: 'Error: ' + e.message }], isError: true }; }
   });
-  const reason = z.string().max(300).optional().describe('One line on why. Shown in the HQ feed next to your name.');
+  const reason = z.string().trim().min(3).max(300).describe('Required. One or two sentences on why you chose this: what you compared and what you expect. Shown to everyone watching, next to your name.');
+  const note = z.string().max(1000).optional().describe('Optional. A short summary of your thinking this turn (what you saw, your plan). Shown in the live reasoning panel.');
   const carId = z.string().describe('Car id, e.g. T-03');
 
   tool('get_rules', 'The rules, fares, costs and scoring. Read this first.', {}, () => RULES);
@@ -173,12 +181,13 @@ function makeServer(base) {
     ({ car, reason }) => JSON.stringify(need().release(car, reason)));
   const action = z.object({
     type: z.enum(['dispatch', 'charge', 'reposition', 'reroute', 'release']), car: z.string(), rider: z.string().optional(), depot: z.string().optional(),
-    charge_to: z.number().optional(), node: z.number().int().optional(), avoid_edges: z.array(z.number().int()).optional(), reason: z.string().max(300).optional(),
+    charge_to: z.number().optional(), node: z.number().int().optional(), avoid_edges: z.array(z.number().int()).optional(), reason: z.string().trim().min(3).max(300).describe('Required: why this action'),
   });
   tool('act', 'Do several actions in order, then optionally advance time, in one call. Returns each action\'s result, what happened, and the new state.', {
-    actions: z.array(action).max(30), advance_seconds: z.number().min(0).max(1800).optional().describe('0 or omitted: do not advance'), stop_on_event: z.boolean().optional(),
-  }, async ({ actions, advance_seconds, stop_on_event }) => {
+    actions: z.array(action).max(30), note, advance_seconds: z.number().min(0).max(1800).optional().describe('0 or omitted: do not advance'), stop_on_event: z.boolean().optional(),
+  }, async ({ actions, note, advance_seconds, stop_on_event }) => {
     const g = need(); const res = [];
+    if (note) g.note(clean(note, 1000));
     for (const a of actions) {
       try {
         const r = a.type === 'dispatch' ? g.dispatch(a.car, a.rider, a.reason) : a.type === 'charge' ? g.charge(a.car, a.depot || 'best', a.charge_to, a.reason)
@@ -192,9 +201,9 @@ function makeServer(base) {
     return parts.join('\n');
   });
   tool('advance', 'Run the sim forward. Stops early (by default) when something you can act on happens. Returns events and the new state.', {
-    seconds: z.number().min(2).max(1800).optional().describe('Max sim seconds, default 120'), stop_on_event: z.boolean().optional(),
-  }, async ({ seconds, stop_on_event }) => {
-    const g = need(); const r = await pacedAdvance(g, seconds || 120, stop_on_event !== false);
+    seconds: z.number().min(2).max(1800).optional().describe('Max sim seconds, default 120'), stop_on_event: z.boolean().optional(), note,
+  }, async ({ seconds, stop_on_event, note }) => {
+    const g = need(); if (note) g.note(clean(note, 1000)); const r = await pacedAdvance(g, seconds || 120, stop_on_event !== false);
     return fmtAdvance(r) + '\n\n' + (g.over() ? fmtScore(g.score()) : fmtState(g.state()));
   });
   tool('get_score', 'Revenue, progress to $1M, the cost breakdown, and the same city run by the Executor alone for comparison.', {}, () => fmtScore(need().score()));
@@ -244,9 +253,13 @@ function startDemo(mode, seed) {
   if (!RANKED_SEEDS.includes(seed)) seed = RANKED_SEEDS[0];
   const g = new Game({ player: 'HQ demo', model: mode === 'scripted' ? 'built-in scripted agent' : 'Executor alone', seed, mode });
   g.demo = true; games.set(g.id, g);
+  let acc = 0;
   const iv = setInterval(() => {
     if (g.over() || !games.has(g.id)) { clearInterval(iv); if (g.over()) g.finish(); return; }
-    if ((watchers.get(g.id)?.size || 0) > 0) { g.lastActive = Date.now(); g.advance(Math.max(2, PACE / 10), false, { minS: 0 }); }
+    if ((watchers.get(g.id)?.size || 0) > 0 && !g.ctl.paused) {
+      g.lastActive = Date.now(); acc += PACE * g.ctl.speed / 10;
+      if (acc >= 2) { const n = Math.floor(acc / 2) * 2; acc -= n; g.advance(n, false, { minS: 0 }); }
+    }
   }, 100);
   return g;
 }
@@ -264,7 +277,7 @@ function handleView(req, res, url) {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive', 'access-control-allow-origin': '*' });
     let evFrom = 0;
     const meta = { id: g.id, player: g.player, model: g.model, seed: g.seed, ranked: g.ranked, mode: g.mode };
-    const send = () => { const snap = g.live(evFrom); evFrom = snap.evTo; res.write(`data: ${JSON.stringify({ meta, snap })}\n\n`); };
+    const send = () => { const snap = g.live(evFrom); evFrom = snap.evTo; res.write(`data: ${JSON.stringify({ meta, snap, ctl: g.ctl })}\n\n`); };
     if (!watchers.has(g.id)) watchers.set(g.id, new Set());
     const total = [...watchers.values()].reduce((n, x) => n + x.size, 0);
     if (total >= LIM.watchers) { res.write('event: full\ndata: {}\n\n'); return res.end(); }
@@ -272,6 +285,14 @@ function handleView(req, res, url) {
     const ka = setInterval(() => res.write(': ka\n\n'), 15000);
     req.on('close', () => { set.delete(res); g.listeners.delete(send); clearInterval(ka); });
     return;
+  }
+  const c = /^\/live\/([\w-]+)\/ctl$/.exec(p);
+  if (c) { // viewer playback: pacing only. The sim is stepped identically at any speed, so scores do not change.
+    const g = games.get(c[1]); if (!g) return page(res, 404, 'text/plain', 'no such game');
+    const sp = +url.searchParams.get('speed'), pz = url.searchParams.get('paused');
+    if (SPEEDS.includes(sp)) g.ctl.speed = sp;
+    if (pz === '1' || pz === '0') g.ctl.paused = pz === '1';
+    g.emit(); return page(res, 200, 'application/json', JSON.stringify(g.ctl));
   }
   if (p === '/demo') {
     const g = startDemo(url.searchParams.get('mode') === 'executor' ? 'executor' : 'scripted', +(url.searchParams.get('seed') || RANKED_SEEDS[0]));

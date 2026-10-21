@@ -31,6 +31,7 @@ class Game {
     this.decisions = [];
     this.toolCalls = 0;
     this.listeners = new Set();
+    this.ctl = { speed: 1, paused: false }; this.lastAdvEnd = Date.now(); // viewer playback settings: change pacing only, never the sim
     this.saved = false;
     this.api.events.push({ t: this.api.S.t, src: 'agent', kind: 'system', tag: 'Online',
       head: mode === 'external' ? `Player ${this.player}, ${this.model}, connected to HQ` : `${mode === 'scripted' ? 'Built-in scripted agent' : 'Executor alone'} dispatching (player ${this.player})`,
@@ -51,6 +52,8 @@ class Game {
       throw new Error(e.message);
     }
   }
+  // a turn note is the model's own summary of its thinking; shown in the live reasoning panel and kept in the run log
+  note(text) { text = String(text || '').trim(); if (!text) return; this.decisions.push({ t: this.api.S.t, clock: clock(this.api.S.t), action: 'note', args: { text }, ok: true }); this.api.actNote(text); this.emit(); }
   dispatch(car, rider, reason) { return this.act('dispatch', { car, rider, reason }, () => this.api.actDispatch(car, rider, reason)); }
   release(car, reason) { return this.act('release', { car, reason }, () => this.api.actRelease(car, reason)); }
   charge(car, depot, chargeTo, reason) { return this.act('charge', { car, depot, chargeTo, reason }, () => this.api.actCharge(car, depot, chargeTo, reason)); }

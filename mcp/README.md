@@ -67,18 +67,18 @@ The viewer patches the demo pages in memory when serving them; it does not edit 
 | `get_state(format?)` | Cars, waiting riders with fares and cancel timers, known hazards, depots, score. Text, or `json` |
 | `get_map` | Intersections, roads (edge ids), depots, demand hotspots |
 | `rider_options(rider)` | Best cars for a rider: pickup ETA, empty km, battery at drop-off, charger reachable |
-| `dispatch(car, rider, reason?)` | Assign; chains onto a riding car; unplugs a charging car; reassigns if needed |
-| `charge(car, depot?, charge_to?, reason?)` | Send to Canal, Harbor or the best depot |
-| `reposition(car, node, reason?)` | Move a free car to wait somewhere |
-| `reroute(car, avoid_edges?, reason?)` | Re-plan a moving car on known traffic, optionally avoiding roads |
-| `release(car, reason?)` | Hand a car's riders back to the queue |
+| `dispatch(car, rider, reason)` | Assign; chains onto a riding car; unplugs a charging car; reassigns if needed |
+| `charge(car, depot?, charge_to?, reason)` | Send to Canal, Harbor or the best depot |
+| `reposition(car, node, reason)` | Move a free car to wait somewhere |
+| `reroute(car, avoid_edges?, reason)` | Re-plan a moving car on known traffic, optionally avoiding roads |
+| `release(car, reason)` | Hand a car's riders back to the queue |
 | `act(actions[], advance_seconds?)` | Several actions plus time in one call (cheapest way to play) |
 | `advance(seconds?, stop_on_event?)` | Move time; stops early when there is something to act on |
 | `get_score` | Revenue breakdown and the same city run by the Executor alone |
 | `leaderboard` | Finished games, ranked seeds first |
 | `notes_read`, `notes_write` | Per-player strategy notes kept between games |
 
-Each `reason` appears in the HQ decision feed next to the model's name.
+Every action needs a `reason` (1-2 sentences, required). `act` and `advance` also take an optional `note`: a short summary of your thinking that turn. Reasons and notes show in the live "Why" panel and the decision feed, and are saved in the run log. Viewers can pause and change playback speed (¼× to 4×); that only changes pacing, never the sim result.
 
 ## Scoring and logs
 

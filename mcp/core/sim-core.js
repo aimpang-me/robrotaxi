@@ -779,6 +779,7 @@ function unassign(r) {
   if (c.next === r) c.next = null; else if (c.job === r) { c.job = null; freeUp(c); }
   r.car = null; r.status = 'waiting';
 }
+function actNote(text) { say('note', 'Note', String(text).slice(0, 1000)); }
 function actDispatch(carId, riderId, reason) {
   const c = carById(carId), r = reqById(riderId);
   if (r.status === 'riding') throw new Error(`${r.id} is already aboard ${r.car.id}.`);
@@ -883,4 +884,4 @@ function liveSnap(evFrom) {
     events: EVENTS.slice(evFrom), evTo: EVENTS.length, score: score(),
   };
 }
-this.API = { gameInit, info, tick, advance, state, score, mapInfo, options, actDispatch, actRelease, actCharge, actReposition, actReroute, liveSnap, over, elapsed, ECON, get events() { return EVENTS; }, get S() { return S; } };
+this.API = { gameInit, info, tick, advance, state, score, mapInfo, options, actNote, actDispatch, actRelease, actCharge, actReposition, actReroute, liveSnap, over, elapsed, ECON, get events() { return EVENTS; }, get S() { return S; } };
