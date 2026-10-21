@@ -1599,6 +1599,127 @@ function cityLayout() {
   }
   return { buildings, water, bridges, parks, trees, treeDensity: 0.004, treeSize: 20 };
 }
+/* ---------------- rider faces ---------------- */
+// Stylised faces drawn once into an atlas: FACES people x 4 expressions, 8 x 8 cells of 128 px.
+// A rider's face comes from a hash of their id, so it stays the same across views and reloads.
+// Expressions follow the fare rules: calm while the fare is full (first 5 min), impatient as it
+// shrinks, angry from 10 min until they cancel at 15, happy at drop-off.
+const FACES = 16, FACE_PX = 128, EXPR = { calm: 0, impatient: 1, angry: 2, happy: 3 };
+const FULL_FARE_WAIT = 5 * 60, ANGRY_WAIT = 10 * 60;
+const faceOf = (id) => { let h = 2166136261; for (const ch of String(id)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0) % FACES; };
+const moodOf = (wait) => (wait < FULL_FARE_WAIT ? 'calm' : wait < ANGRY_WAIT ? 'impatient' : 'angry');
+const faceCell = (f, mood) => [f % 8, EXPR[mood] * 2 + Math.floor(f / 8)]; // column, row in the atlas
+function drawFace(g, cx, cy, R, f, mood) {
+  const r = mulberry(f * 97 + 3), pick = (a) => a[Math.floor(r() * a.length)];
+  const skin = pick(['#f3d2b8', '#e8b98f', '#d19a6a', '#b07444', '#8a5530', '#5f3a22']);
+  const hair = pick(['#1f1a17', '#3b2a1e', '#6b4527', '#b07a3c', '#d9b26a', '#8f8a84', '#a3392b']);
+  const style = f % 6, glasses = r() < 0.3, bg = `hsl(${Math.floor(r() * 360)},45%,78%)`;
+  const P = (x, y) => [cx + x * R, cy + y * R];
+  const ell = (x, y, rx, ry, fill) => { g.beginPath(); g.ellipse(...P(x, y), rx * R, ry * R, 0, 0, 6.2832); g.fillStyle = fill; g.fill(); };
+  g.save(); g.beginPath(); g.arc(cx, cy, R, 0, 6.2832); g.clip();
+  g.fillStyle = bg; g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+  ell(0, 1.05, 0.62, 0.38, pick(['#3d5a80', '#6d597a', '#2a9d8f', '#e76f51', '#264653', '#8d99ae'])); // shoulders
+  ell(0, 0.62, 0.15, 0.2, skin); // neck
+  if (style === 1) ell(0, -0.02, 0.6, 0.6, hair); // long hair behind the head
+  ell(-0.5, 0.08, 0.1, 0.14, skin); ell(0.5, 0.08, 0.1, 0.14, skin); // ears
+  ell(0, 0.06, 0.5, 0.58, skin); // head
+  g.fillStyle = hair;
+  if (style === 0 || style === 1) { g.beginPath(); g.ellipse(...P(0, -0.22), 0.52 * R, 0.4 * R, 0, Math.PI, 0); g.fill(); }
+  if (style === 2) for (let a = 0; a < 9; a++) { const t = Math.PI * (1.05 + a * 0.112); ell(Math.cos(t) * 0.46, -0.12 + Math.sin(t) * 0.42, 0.17, 0.17, hair); }
+  if (style === 3) { g.beginPath(); g.ellipse(...P(0, -0.22), 0.52 * R, 0.4 * R, 0, Math.PI, 0); g.fill(); ell(0, -0.66, 0.2, 0.17, hair); }
+  if (style === 5) { const cap = pick(['#e63946', '#1d3557', '#f4a261', '#2a9d8f']); g.fillStyle = cap; g.beginPath(); g.ellipse(...P(0, -0.24), 0.54 * R, 0.4 * R, 0, Math.PI, 0); g.fill(); ell(0.3, -0.24, 0.42, 0.08, cap); }
+  // style 4 is bald
+  const ink = '#2b2522'; g.strokeStyle = ink; g.fillStyle = ink; g.lineCap = 'round'; g.lineWidth = R * 0.07;
+  const line = (pts) => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(...P(x, y)) : g.moveTo(...P(x, y)))); g.stroke(); };
+  if (mood === 'happy') { for (const s of [-1, 1]) { g.beginPath(); g.arc(...P(s * 0.2, 0.04), 0.09 * R, Math.PI * 1.1, Math.PI * 1.9); g.stroke(); } }
+  else { ell(-0.2, 0.02, 0.06, 0.075, ink); ell(0.2, 0.02, 0.06, 0.075, ink); }
+  if (mood === 'impatient') { line([[-0.3, -0.13], [-0.1, -0.11]]); line([[0.1, -0.11], [0.3, -0.15]]); }
+  if (mood === 'angry') { line([[-0.32, -0.2], [-0.1, -0.1]]); line([[0.1, -0.1], [0.32, -0.2]]); ell(-0.3, 0.2, 0.1, 0.06, 'rgba(220,60,50,.45)'); ell(0.3, 0.2, 0.1, 0.06, 'rgba(220,60,50,.45)'); }
+  if (mood === 'happy') { ell(-0.3, 0.2, 0.09, 0.05, 'rgba(240,110,110,.4)'); ell(0.3, 0.2, 0.09, 0.05, 'rgba(240,110,110,.4)'); }
+  g.lineWidth = R * 0.06; g.strokeStyle = ink;
+  if (mood === 'calm') { g.beginPath(); g.arc(...P(0, 0.2), 0.16 * R, Math.PI * 0.2, Math.PI * 0.8); g.stroke(); }
+  if (mood === 'impatient') line([[-0.13, 0.33], [0.13, 0.31]]);
+  if (mood === 'angry') { g.beginPath(); g.arc(...P(0, 0.44), 0.15 * R, Math.PI * 1.2, Math.PI * 1.8); g.stroke(); }
+  if (mood === 'happy') { g.beginPath(); g.arc(...P(0, 0.22), 0.18 * R, 0, Math.PI); g.closePath(); g.fillStyle = '#7a2b2b'; g.fill(); g.stroke(); }
+  if (glasses) { g.lineWidth = R * 0.045; for (const s of [-1, 1]) { g.beginPath(); g.arc(...P(s * 0.2, 0.02), 0.13 * R, 0, 6.2832); g.stroke(); } line([[-0.07, 0.0], [0.07, 0.0]]); }
+  g.restore();
+}
+let faceAtlasCanvas = null;
+function faceAtlas() {
+  if (faceAtlasCanvas) return faceAtlasCanvas;
+  const cv = document.createElement('canvas'); cv.width = cv.height = FACE_PX * 8; const g = cv.getContext('2d');
+  for (let f = 0; f < FACES; f++) for (const mood of Object.keys(EXPR)) { const [c, rw] = faceCell(f, mood); drawFace(g, (c + 0.5) * FACE_PX, (rw + 0.5) * FACE_PX, FACE_PX * 0.46, f, mood); }
+  return (faceAtlasCanvas = cv);
+}
+/* ---------------- rider avatars (3D) ---------------- */
+// Every rider face is one instanced billboard draw. Waiting riders float over their pickup pin
+// inside a patience ring that fills toward the 15 min cancel (green while the fare is full,
+// orange, then red and pulsing); riders aboard sit on their car's roof with a yellow ring.
+// Boarding, giving up and drop-off animate. Reads only r.id, r.from, r.t0, r.status, r.car.
+const AV = { max: 96, mesh: null, seen: new Map(), fx: [], board: new Map() };
+const RING_COL = { calm: COL.green, impatient: COL.orange, angry: COL.red, riding: COL.yellow, cancel: '#8a877f', happy: COL.green };
+const RING_IDX = Object.fromEntries(Object.keys(RING_COL).map((k, i) => [k, i]));
+const spotOf = (n) => W3(nodes[n].x + 12, nodes[n].y - 12); // over the pickup pin
+function initAvatars() {
+  const tex = new THREE.CanvasTexture(faceAtlas()); tex.anisotropy = 4;
+  const geo = new THREE.InstancedBufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], 3)); geo.setIndex([0, 1, 2, 0, 2, 3]);
+  const at = (name, k) => { const a = new THREE.InstancedBufferAttribute(new Float32Array(AV.max * k), k); a.setUsage(THREE.DynamicDrawUsage); geo.setAttribute(name, a); return a; };
+  AV.pos = at('aPos', 3); AV.cell = at('aCell', 2); AV.ring = at('aRing', 3); AV.size = at('aSize', 1); // ring: filled fraction, colour, alpha
+  geo.instanceCount = 0;
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { atlas: { value: tex }, cols: { value: Object.values(RING_COL).map((c) => new THREE.Color(c)) } },
+    vertexShader: `attribute vec3 aPos; attribute vec2 aCell; attribute vec3 aRing; attribute float aSize; uniform vec3 cols[6];
+      varying vec2 vP; varying vec2 vCell; varying vec2 vRing; varying vec3 vCol;
+      void main() { vec4 mv = modelViewMatrix * vec4(aPos, 1.0); mv.xy += position.xy * aSize * max(1.0, -mv.z / 380.0);
+        gl_Position = projectionMatrix * mv; vP = position.xy; vCell = aCell; vRing = aRing.xz; vCol = cols[int(aRing.y + 0.5)]; }`,
+    fragmentShader: `uniform sampler2D atlas; varying vec2 vP; varying vec2 vCell; varying vec2 vRing; varying vec3 vCol;
+      void main() { float r = length(vP); if (r > 1.0) discard; vec4 c;
+        if (r < 0.74) { vec2 l = 0.5 + vP / 0.74 * 0.46; c = texture2D(atlas, vec2((vCell.x + l.x) / 8.0, (7.0 - vCell.y + l.y) / 8.0)); }
+        else if (r < 0.8) c = vec4(0.11, 0.11, 0.11, 1.0);
+        else { float a = atan(vP.x, vP.y); float f = (a < 0.0 ? a + 6.28318 : a) / 6.28318; c = f <= vRing.x ? vec4(vCol, 1.0) : vec4(0.2, 0.2, 0.19, 1.0); }
+        gl_FragColor = vec4(c.rgb, c.a * vRing.y * smoothstep(1.0, 0.93, r)); }`,
+    transparent: true, depthTest: false, depthWrite: false,
+  });
+  AV.mesh = new THREE.Mesh(geo, mat); AV.mesh.frustumCulled = false; AV.mesh.renderOrder = 5; scene.add(AV.mesh);
+}
+function renderAvatars(now) {
+  if (!AV.mesh) return;
+  let n = 0;
+  const put = (x, y, z, f, mood, frac, ring, alpha, size) => {
+    if (n >= AV.max) return; const [c, rw] = faceCell(f, mood);
+    AV.pos.setXYZ(n, x, y, z); AV.cell.setXY(n, c, rw); AV.ring.setXYZ(n, frac, RING_IDX[ring], alpha); AV.size.setX(n, size); n++;
+  };
+  const t = now / 1000, simple = reduceMotion || ART.quality === 'low', live = new Map(), ease = (k) => 1 - Math.pow(1 - k, 3), stack = new Map();
+  for (const r of S.reqs) {
+    const f = faceOf(r.id);
+    if (r.status === 'waiting' || r.status === 'assigned') {
+      const wait = Math.max(0, S.t - r.t0), mood = moodOf(wait), [x, z] = spotOf(r.from), k = stack.get(r.from) || 0, y = 30 + k * 19; stack.set(r.from, k + 1); // riders at one spot stack up
+      put(x, y, z, f, mood, Math.min(1, wait / CANCEL_AFTER), mood, 1, 8 * (mood === 'angry' && !simple ? 1 + 0.08 * Math.sin(t * 6) : 1));
+      live.set(r.id, { st: 'wait', x, y, z, f });
+    } else if (r.status === 'riding' && r.car && carMeshes.has(r.car)) {
+      const p = carMeshes.get(r.car).g.position; let x = p.x, y = 13, z = p.z, size = 5.5;
+      if (AV.seen.get(r.id)?.st === 'wait' && !simple) AV.board.set(r.id, { t0: now, ...AV.seen.get(r.id) });
+      const b = AV.board.get(r.id);
+      if (b) { const k = Math.min(1, (now - b.t0) / 700), e = ease(k); x = b.x + (x - b.x) * e; y = b.y + (y - b.y) * e + Math.sin(k * Math.PI) * 8; z = b.z + (z - b.z) * e; size = 8 + (5.5 - 8) * e; if (k >= 1) AV.board.delete(r.id); }
+      put(x, y, z, f, 'calm', 1, 'riding', 1, size);
+      live.set(r.id, { st: 'ride', x: p.x, y: 13, z: p.z, f });
+    }
+  }
+  // riders who left since the last frame: gave up waiting, or got out at their stop
+  const gone = [];
+  for (const [id, s] of AV.seen) if (!live.has(id)) gone.push(s);
+  if (!simple && gone.length <= 6) for (const s of gone) AV.fx.push({ ...s, kind: s.st === 'wait' ? 'cancel' : 'happy', t0: now }); // more at once is a world reset
+  AV.seen = live;
+  AV.fx = AV.fx.filter((e) => {
+    const k = (now - e.t0) / (e.kind === 'cancel' ? 1200 : 1500); if (k >= 1) return false;
+    if (e.kind === 'cancel') put(e.x, e.y - k * 14, e.z, e.f, 'angry', 1, 'cancel', 1 - k, 8 * (1 - 0.35 * k));
+    else put(e.x, e.y + ease(k) * 16, e.z, e.f, 'happy', 1, 'happy', k < 0.6 ? 1 : (1 - k) / 0.4, 5.5 + 3.5 * ease(Math.min(1, k * 2)));
+    return true;
+  });
+  AV.mesh.geometry.instanceCount = n;
+  for (const a of [AV.pos, AV.cell, AV.ring, AV.size]) a.needsUpdate = true;
+}
 function init3D() {
   const host = $('three');
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -1671,6 +1792,7 @@ function init3D() {
   incGroup = new THREE.Group(); scene.add(incGroup);
   trafficGroup = new THREE.Group(); scene.add(trafficGroup);
   initQuality();
+  initAvatars();
   hoverMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 22), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false })); hoverMesh.visible = false; scene.add(hoverMesh);
   GEO.pin = new THREE.ConeGeometry(4, 10, 14); GEO.pin.rotateX(Math.PI); GEO.pinHead = new THREE.SphereGeometry(5, 16, 12); GEO.drop = new THREE.OctahedronGeometry(4.5);
   GEO.cone = new THREE.ConeGeometry(2.4, 7, 10); GEO.sign = new THREE.ConeGeometry(9, 2, 3); GEO.sign.rotateX(Math.PI / 2); GEO.post = new THREE.CylinderGeometry(0.8, 0.8, 14, 6);
@@ -1761,6 +1883,7 @@ function renderMap(now) {
     m.rmat.opacity = S.selected && S.selected !== c ? 0.22 : 0.95;
     m.ribbon.visible = true;
   }
+  renderAvatars(now);
   const sel = S.selected || S.hoverCar;
   if (sel) { const m = carMeshes.get(sel); ringMesh.visible = true; ringMesh.position.set(m.g.position.x, 1.2, m.g.position.z); ringMesh.material = sel.state === 'stranded' ? MAT['lamp-red'] : MAT['lamp-yellow']; } else ringMesh.visible = false;
   // pins bob, incident tags follow camera
