@@ -104,14 +104,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function pacedAdvance(g, seconds, stop) {
   const watched = () => PACE > 0 && (watchers.get(g.id)?.size || 0) > 0;
   if (!watched()) return g.advance(seconds, stop);
-  const total = Math.max(2, Math.min(1800, +seconds || 120)); let done = 0; const merged = { advancedS: 0, stoppedFor: [], events: [] };
+  g.toolCalls++;
+  // small slices so viewers get about 10 updates a second; stop reasons carry across slices
+  const total = Math.max(2, Math.min(1800, +seconds || 120)), slice = Math.max(2, PACE / 10);
+  let done = 0; const why = [], merged = { advancedS: 0, stoppedFor: [], events: [] };
   while (done < total && !g.over()) {
-    const chunk = Math.min(20, total - done);
-    const r = g.advance(chunk, stop);
+    const t0 = Date.now();
+    const r = g.advance(Math.min(slice, total - done), stop, { minS: Math.max(0, 20 - done), why });
     if (r.over) return r;
     merged.advancedS += r.advancedS; merged.events.push(...r.events); done += r.advancedS;
-    if (r.stoppedFor.length) { merged.stoppedFor = r.stoppedFor; break; }
-    if (watched()) await sleep(1000 * chunk / PACE);
+    if (stop && why.length && done >= 20) { merged.stoppedFor = why.slice(0, 8); break; }
+    if (watched()) await sleep(Math.max(0, 1000 * r.advancedS / PACE - (Date.now() - t0)));
   }
   if (g.over()) g.finish();
   return merged;
@@ -225,7 +228,10 @@ function patchPage(file) {
   let html = fs.readFileSync(path.join(PAGES, file), 'utf8');
   const rep = (a, b) => { if (!html.includes(a)) throw new Error(`${file} changed: cannot find "${a.slice(0, 40)}"`); html = html.replace(a, b); };
   rep('function step(dt) {', 'function step(dt) {\n  if (window.__robroLive) return;');
-  rep('window.__robro = {', 'window.__robroLiveHooks = { main: () => MAIN, shadow: () => SHADOW, setShadow: (w) => { SHADOW = w; }, cloneWorld, edges, DEPOTS, recomputeTraffic, log, setAgentUI };\nwindow.__robro = {');
+  rep('window.__robro = {', 'window.__robroLiveHooks = { main: () => MAIN, shadow: () => SHADOW, setShadow: (w) => { SHADOW = w; }, cloneWorld, nodes, edges, E, DEPOTS, recomputeTraffic, log, setAgentUI };\nwindow.__robro = {');
+  // live.js eases each car between server updates and rounds corners; it hands the page a finished pose
+  rep('function carPos(c) {', 'function carPos(c) {\n  if (c.livePos) return c.livePos;');
+  rep('let ox = 0, oy = 0;\n    if (c.seg < c.path.length - 1) {', 'let ox = 0, oy = 0;\n    if (c.livePos) { /* lane offset already in livePos */ } else if (c.seg < c.path.length - 1) {');
   return html + '\n<script src="/live.js"></script>\n';
 }
 const page = (res, code, type, body) => { res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store' }); res.end(body); };
@@ -240,8 +246,8 @@ function startDemo(mode, seed) {
   g.demo = true; games.set(g.id, g);
   const iv = setInterval(() => {
     if (g.over() || !games.has(g.id)) { clearInterval(iv); if (g.over()) g.finish(); return; }
-    if ((watchers.get(g.id)?.size || 0) > 0) { g.lastActive = Date.now(); g.advance(Math.max(2, PACE / 4), false); }
-  }, 250);
+    if ((watchers.get(g.id)?.size || 0) > 0) { g.lastActive = Date.now(); g.advance(Math.max(2, PACE / 10), false, { minS: 0 }); }
+  }, 100);
   return g;
 }
 

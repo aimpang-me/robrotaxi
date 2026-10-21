@@ -199,8 +199,9 @@ function actReroute(carId, avoid = [], reason) {
 
 /* ---------- time ---------- */
 // advance up to maxS sim seconds; with stopOnEvent, stop early when a decision is likely needed
-function advance(maxS, stopOnEvent) {
-  const evFrom = EVENTS.length, t0 = S.t, why = [];
+// minS: never stop before this many sim seconds. why: pass an array to carry stop reasons across several calls (paced play).
+function advance(maxS, stopOnEvent, minS = 20, why = []) {
+  const evFrom = EVENTS.length, t0 = S.t;
   const freeIds = () => new Set(S.cars.filter((c) => c.state === 'idle' && c.battery > 0).map((c) => c.id));
   let prevFree = freeIds();
   const lowSeen = new Set(S.cars.filter((c) => c.state === 'idle' && c.battery < 20).map((c) => c.id));
@@ -219,7 +220,7 @@ function advance(maxS, stopOnEvent) {
       if (c.state !== 'stranded') c._strandSeen = false;
       if (c.state === 'idle' && c.battery < 20 && !lowSeen.has(c.id)) { lowSeen.add(c.id); why.push(`${c.id} idle at ${Math.round(c.battery)}%`); }
     }
-    if (why.length && S.t - t0 >= 20) break;
+    if (why.length && S.t - t0 >= minS) break;
   }
   for (const r of S.reqs) G.seenReq.add(r.id);
   for (const i of S.incidents) if (i.seen) G.seenInc.add(i.id);

@@ -56,11 +56,12 @@ class Game {
   charge(car, depot, chargeTo, reason) { return this.act('charge', { car, depot, chargeTo, reason }, () => this.api.actCharge(car, depot, chargeTo, reason)); }
   reposition(car, node, reason) { return this.act('reposition', { car, node, reason }, () => this.api.actReposition(car, node, reason)); }
   reroute(car, avoid, reason) { return this.act('reroute', { car, avoid, reason }, () => this.api.actReroute(car, avoid || [], reason)); }
-  advance(seconds = 120, stopOnEvent = true) {
-    this.toolCalls++;
+  // part: one slice of a paced advance ({ minS, why }); it is not counted as a tool call
+  advance(seconds = 120, stopOnEvent = true, part = null) {
+    if (!part) this.toolCalls++;
     if (this.over()) return { over: true, score: this.score() };
     const s = Math.max(2, Math.min(1800, +seconds || 120));
-    const res = J(this.api.advance(s, stopOnEvent));
+    const res = J(part ? this.api.advance(s, stopOnEvent, part.minS, part.why) : this.api.advance(s, stopOnEvent));
     this.emit();
     if (this.over()) this.finish();
     return res;
