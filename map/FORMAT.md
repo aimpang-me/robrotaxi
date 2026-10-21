@@ -53,9 +53,18 @@ The graph is the largest strongly connected component, so every node can reach e
   land:      [[...], ...],                           // Toronto Islands and other land drawn over the lake
   parks:     [[...], ...],                           // parks, gardens, pitches
   rail:      [[...], ...],                           // rail corridor centrelines (polylines)
-  buildings: [[h, x0, y0, x1, y1, ...], ...],        // footprint polygon + height in metres
-  landmarks: [{ name, kind, x, y, h, poly }]         // CN Tower, Union Station, Scotiabank Arena, Rogers Centre, City Hall, ...
+  buildings: [[h, type, x0, y0, dx1, dy1, ...], ...], // height in metres, style type, footprint (see below)
+  landmarks: [{ name, kind, x, y, h, poly }],        // CN Tower, Union Station, Scotiabank Arena, Rogers Centre, City Hall, ...
+  minor: [[kind, x0, y0, x1, y1, ...], ...]          // roads drawn but not driven: 0 service/pedestrian, 1-2 streets outside the play area
 }
 ```
+
+Polygons in `water`, `land`, `parks`, `rail`, `landmarks.poly` are flat `[x0, y0, x1, y1, ...]` in units.
+Buildings are packed tighter: footprint points in **integer metres** (units x 10) from the map origin, the first point absolute and the rest as deltas
+from the previous point. An optional trailing `"m", minHeightM` marks a part that floats (bridges between towers, the CN Tower pod).
+`type`: 0 other, 1 house, 2 apartments, 3 office/retail/hotel, 4 civic/church/school, 5 industrial/parking, 6 glass facade.
+Where OSM maps a tower as `building:part`s, the parts replace the outline.
+
+Draw order that works: lake colour as background, `land` (mainland and the Toronto Islands), `water` (the Don, slips, ponds) on top, `parks`, `rail`, `minor`, graph edges, buildings.
 
 Building heights come from OSM `height`, else `building:levels` x 3.2 m, else a default by building type.
