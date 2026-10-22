@@ -2658,7 +2658,6 @@ function renderPins() {
     } else { const d = new THREE.Mesh(GEO.drop, MAT['lamp-' + col]); d.position.set(x, 6, z); pinGroup.add(d); }
   };
   for (const r of S.reqs) {
-    if (r.status === 'waiting' || r.status === 'assigned') add(r.from, 'pin', 'blue', r.mine);
     if (r.status === 'riding') add(r.to, 'drop', 'yellow');
     else if (r.status === 'assigned' || (r.mine && r.status === 'waiting')) add(r.to, 'drop', 'blue');
   }
