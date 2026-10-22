@@ -85,7 +85,7 @@ class Game {
   }
   // write the result line and the full decision log once the game ends
   finish() {
-    if (this.saved || process.env.ROBRO_NO_LOG) return;
+    if (this.saved || this.abandoned || process.env.ROBRO_NO_LOG) return; // a replaced game is not a leaderboard row
     this.saved = true;
     const sum = this.summary();
     store.addResult(sum, { ...sum, decisionsLog: this.decisions, feed: J(this.api.events).filter((e) => e.kind !== 'fare') });
