@@ -1476,11 +1476,6 @@ function groundTexture() {
   for (const e of edges) { g.lineWidth = ROAD_W(e) + 0.35; line(e.pts); }
   g.strokeStyle = COL.road;
   for (const e of edges) { g.lineWidth = ROAD_W(e); line(e.pts); }
-  // lane dashes on two-way streets, double yellow on the wide ones
-  g.setLineDash([0.9, 1.4]); g.lineCap = 'butt'; g.strokeStyle = 'rgba(237,235,227,.5)'; g.lineWidth = 0.1;
-  for (const e of edges) if (!e.oneway && ROAD_W(e) < 1.8) line(e.pts);
-  g.setLineDash([]); g.strokeStyle = 'rgba(242,194,48,.55)'; g.lineWidth = 0.08;
-  for (const e of edges) if (!e.oneway && ROAD_W(e) >= 1.8) line(e.pts);
   // rail corridor
   g.strokeStyle = 'rgba(120,112,100,.6)'; g.lineWidth = 0.35; g.setLineDash([0.6, 0.5]);
   for (const r of SCENE.rail) line(flatPts(r));
@@ -1560,22 +1555,23 @@ function facadeTexture(style) {
     const sky = g.createLinearGradient(0, 0, S, S); sky.addColorStop(0, '#2c4656'); sky.addColorStop(0.5, '#4d6e80'); sky.addColorStop(1, '#253a47');
     g.fillStyle = sky; g.fillRect(0, 0, S, S);
     for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) { g.globalAlpha = 0.35; g.fillStyle = glassCol(); g.fillRect(x * c, y * c, c, c); }
-    g.globalAlpha = 1; g.fillStyle = '#9aa7ad';
-    for (let x = 0; x < TILE; x++) g.fillRect(x * c, 0, 3, S);
-    g.fillStyle = '#1b2329'; for (let y = 0; y < TILE; y++) g.fillRect(0, y * c + c - 9, S, 9);
+    g.globalAlpha = 1; g.fillStyle = '#71838b';
+    for (let x = 0; x < TILE; x++) g.fillRect(x * c, 0, x % 4 === 0 ? 2.5 : 1, S);
+    g.fillStyle = '#35454e'; for (let y = 0; y < TILE; y++) g.fillRect(0, y * c + c - 5, S, 5);
+    g.fillStyle = 'rgba(184,205,211,.12)'; g.fillRect(c * 2 + 3, 0, c * 2 - 6, S);
   } else if (style === 'brick') {
     g.fillStyle = '#8b4a37'; g.fillRect(0, 0, S, S);
     for (let y = 0; y < S; y += 6) for (let x = (y / 6) % 2 ? -6 : 0; x < S; x += 12) { g.fillStyle = `hsl(${12 + r() * 8},${38 + r() * 12}%,${30 + r() * 9}%)`; g.fillRect(x, y, 11, 5); }
     for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
       g.fillStyle = '#d8d0c0'; g.fillRect(x * c + 15, y * c + 12, 34, 40);
       g.fillStyle = r() < 0.08 ? '#c9a868' : glassCol(); g.fillRect(x * c + 18, y * c + 14, 28, 35);
-      g.fillStyle = '#d8d0c0'; g.fillRect(x * c + 31, y * c + 14, 2, 35);
+      if ((x + y) % 3 === 0) { g.fillStyle = '#aaa18e'; g.fillRect(x * c + 31, y * c + 14, 1, 35); }
     }
   } else if (style === 'concrete') {
     g.fillStyle = '#aaa69c'; g.fillRect(0, 0, S, S);
     for (let y = 0; y < TILE; y++) {
       g.fillStyle = '#9f978a'; g.fillRect(0, y * c + c - 4, S, 4);
-      for (let x = 0; x < TILE; x++) { g.fillStyle = glassCol(); g.fillRect(x * c, y * c + 16, c, 30); g.fillStyle = '#8c8578'; g.fillRect(x * c, y * c + 16, 3, 30); }
+      for (let x = 0; x < TILE; x++) { g.fillStyle = glassCol(); g.fillRect(x * c + 5, y * c + 16, c - 10, 30); g.fillStyle = '#8c8578'; g.fillRect(x * c + 4, y * c + 46, c - 8, 3); }
     }
   } else {
     g.fillStyle = '#c1b9a8'; g.fillRect(0, 0, S, S);
@@ -1684,10 +1680,20 @@ function waterMaterial() {
 // a tree of unit height; kind 0 is a round broadleaf, 1 a conifer
 function treeGeometry(kind) {
   const b = new Batch(), bark = new THREE.Color('#5a4330').convertSRGBToLinear(), leaf = new THREE.Color(kind ? '#3f6a3c' : '#5d8a3e').convertSRGBToLinear();
-  const add = (geo, col, y) => { const g = geo.index ? geo.toNonIndexed() : geo, p = g.attributes.position.array; for (let i = 0; i < p.length; i += 9) b.tri([p[i], p[i + 1] + y, p[i + 2]], [p[i + 3], p[i + 4] + y, p[i + 5]], [p[i + 6], p[i + 7] + y, p[i + 8]], col); };
-  add(new THREE.CylinderGeometry(0.035, 0.05, 0.4, 5, 1), bark, 0.2);
-  if (kind) { add(new THREE.ConeGeometry(0.26, 0.5, 6, 1), leaf, 0.5); add(new THREE.ConeGeometry(0.2, 0.4, 6, 1), leaf, 0.78); }
-  else { const ico = new THREE.IcosahedronGeometry(0.3, 0); ico.scale(1, 0.9, 1); add(ico, leaf, 0.66); }
+  const add = (geo, col) => { const g = geo.index ? geo.toNonIndexed() : geo, p = g.attributes.position.array; for (let i = 0; i < p.length; i += 9) b.tri([p[i], p[i + 1], p[i + 2]], [p[i + 3], p[i + 4], p[i + 5]], [p[i + 6], p[i + 7], p[i + 8]], col); g.dispose(); if (g !== geo) geo.dispose(); };
+  add(new THREE.CylinderGeometry(0.025, 0.045, 0.58, 5, 1).translate(0, 0.29, 0), bark);
+  if (kind) {
+    for (const [radius, height, y] of [[0.27, 0.42, 0.46], [0.23, 0.4, 0.65], [0.16, 0.34, 0.83]]) add(new THREE.ConeGeometry(radius, height, 7, 1).translate(0, y, 0), leaf.clone().multiplyScalar(0.9 + y * 0.2));
+  } else {
+    for (let i = 0; i < 4; i++) {
+      const angle = i * Math.PI / 2 + 0.4, x = Math.cos(angle) * 0.18, z = Math.sin(angle) * 0.18, y = 0.6 + i % 2 * 0.08;
+      const end = new THREE.Vector3(x, y, z), start = new THREE.Vector3(0, 0.35, 0), delta = end.clone().sub(start);
+      const branch = new THREE.CylinderGeometry(0.01, 0.02, delta.length(), 4, 1);
+      branch.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.clone().normalize()))).translate(x / 2, (y + 0.35) / 2, z / 2); add(branch, bark);
+      add(new THREE.IcosahedronGeometry(0.235, 0).scale(1, 0.92, 1).rotateY(angle).translate(x, y, z), leaf.clone().multiplyScalar(0.88 + i * 0.07));
+    }
+    add(new THREE.IcosahedronGeometry(0.25, 0).scale(1, 0.9, 1).translate(0.01, 0.81, 0), leaf.clone().multiplyScalar(1.12));
+  }
   return b.geometry();
 }
 function swayMaterial() {
@@ -1707,40 +1713,78 @@ function swayMaterial() {
   return mat;
 }
 
+function roofBoxFits(cx, cz, len, wid, ang, pts, clearance = 0.12) {
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, z]) => [cx + x * len / 2 * ca - z * wid / 2 * sa, cz + x * len / 2 * sa + z * wid / 2 * ca]);
+  const cross = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  for (const p of corners) {
+    if (!inPoly(p[0], p[1], pts)) return false;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length], dx = b[0] - a[0], dz = b[1] - a[1];
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / (dx * dx + dz * dz || 1)));
+      if (Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dz) < clearance) return false;
+    }
+  }
+  for (let j = 0; j < 4; j++) for (let i = 0; i < pts.length; i++) {
+    const a = corners[j], b = corners[(j + 1) % 4], c = pts[i], d = pts[(i + 1) % pts.length];
+    if (cross(a, b, c) * cross(a, b, d) < 0 && cross(c, d, a) * cross(c, d, b) < 0) return false;
+  }
+  return true;
+}
+
 function buildCityArt(L) {
   if (L.floor) FLOOR = L.floor; if (L.bay) BAY = L.bay;
   scene.add(skyDome());
   const flat = (pts, y, mat) => { const geo = new THREE.ShapeGeometry(new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z)))); geo.rotateX(-Math.PI / 2); const m = new THREE.Mesh(geo, mat); m.position.y = y; m.receiveShadow = true; scene.add(m); return m; };
   // buildings: one merged mesh per facade style and one for all roofs
-  const styles = ['glass', 'brick', 'concrete', 'stone'], walls = {}, roofs = new Batch(), units = [];
+  const styles = ['glass', 'brick', 'concrete', 'stone'], walls = {}, roofs = new Batch(), units = new Batch();
   styles.forEach((s) => (walls[s] = new Batch()));
   const roofCols = ['#4a4946', '#55534e', '#3f4143', '#5e5a52'].map(lin);
   for (const b of L.buildings) {
     const W = walls[b.style] || walls.concrete, roofCol = roofCols[Math.floor(artRand() * roofCols.length)];
     const uOff = Math.floor(artRand() * TILE) * BAY, vOff = Math.floor(artRand() * TILE) / TILE;
-    const rect = b.pts.length === 4, tiered = rect && b.h > 34;
+    const pts = ccw(b.pts), rect = pts.length === 4 && pts.every((p, i) => { const q = pts[(i + 1) % 4], r = pts[(i + 2) % 4]; return (q[0] - p[0]) * (r[1] - q[1]) - (q[1] - p[1]) * (r[0] - q[0]) > 0; }), tiered = rect && b.h > 34;
     const low = tiered ? Math.round(b.h * 0.72 / FLOOR) * FLOOR : b.h;
     extrude(W, roofs, b.pts, b.y0 || 0, low, roofCol, uOff, vOff);
     const cx = b.pts.reduce((s, p) => s + p[0], 0) / b.pts.length, cz = b.pts.reduce((s, p) => s + p[1], 0) / b.pts.length;
-    if (tiered) extrude(W, roofs, b.pts.map(([x, z]) => [cx + (x - cx) * 0.66, cz + (z - cz) * 0.66]), low, b.h, roofCol, uOff, vOff);
-    if (rect) { // a few rooftop plant boxes
-      const ex = Math.abs(b.pts[2][0] - b.pts[0][0]) * (tiered ? 0.25 : 0.32), ez = Math.abs(b.pts[2][1] - b.pts[0][1]) * (tiered ? 0.25 : 0.32);
-      const n = ex * ez > 40 ? 1 + Math.floor(artRand() * 3) : 0;
-      for (let k = 0; k < n; k++) units.push([cx + (artRand() * 2 - 1) * ex, b.h, cz + (artRand() * 2 - 1) * ez, 2 + artRand() * 2.5, 1.2 + artRand() * 1.2, 2 + artRand() * 2.5]);
+    const roofPts = tiered ? pts.map(([x, z]) => [cx + (x - cx) * 0.66, cz + (z - cz) * 0.66]) : pts;
+    if (tiered) extrude(W, roofs, roofPts, low, b.h, roofCol, uOff, vOff);
+    const trim = roofCol.clone().multiplyScalar(1.32), machine = lin('#85857d'), vent = lin('#424a4c');
+    for (let i = 0; b.h > 10 && i < roofPts.length; i++) {
+      const a = roofPts[i], p = roofPts[(i + 1) % roofPts.length], dx = p[0] - a[0], dz = p[1] - a[1], len = Math.hypot(dx, dz);
+      if (len < 3) continue;
+      const x = (a[0] + p[0]) / 2 - dz / len * 0.38, z = (a[1] + p[1]) / 2 + dx / len * 0.38, ang = Math.atan2(dz, dx);
+      if (roofBoxFits(x, z, len - 0.9, 0.38, ang, roofPts)) {
+        const nx = -Math.sin(ang) * 0.19, nz = Math.cos(ang) * 0.19, ex = Math.cos(ang) * (len - 0.9) / 2, ez = Math.sin(ang) * (len - 0.9) / 2;
+        const a = [x - ex - nx, b.h, z - ez - nz], c = [x + ex - nx, b.h, z + ez - nz], d = [x - ex + nx, b.h + 0.65, z - ez + nz], f = [x + ex + nx, b.h + 0.65, z + ez + nz];
+        roofs.quad(a, [a[0], b.h + 0.65, a[2]], [c[0], b.h + 0.65, c[2]], c, trim);
+        roofs.quad([a[0], b.h + 0.65, a[2]], d, f, [c[0], b.h + 0.65, c[2]], trim);
+      }
+    }
+    const xs = roofPts.map((p) => p[0]), zs = roofPts.map((p) => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+    const count = b.h > 10 ? Math.min(2, Math.floor(polyArea(roofPts) / 450)) : 0, ang = Math.atan2(roofPts[1][1] - roofPts[0][1], roofPts[1][0] - roofPts[0][0]), occupied = [];
+    for (let k = 0, tries = 0; k < count && tries < count * 10; tries++) {
+      const x = x0 + artRand() * (x1 - x0), z = z0 + artRand() * (z1 - z0), len = 2.2 + artRand() * 2.4, wid = 1.6 + artRand() * 1.5, h = 0.8 + artRand() * 0.9;
+      if (!roofBoxFits(x, z, len + 1.2, wid + 1.2, ang, roofPts, 0.6)) continue;
+      const radius = Math.hypot(len, wid) / 2 + 0.5;
+      if (occupied.some(([px, pz, r]) => Math.hypot(x - px, z - pz) < radius + r)) continue;
+      units.box(x, z, len + 0.35, wid + 0.35, b.h + 0.03, b.h + 0.2, ang, vent);
+      units.box(x, z, len, wid, b.h + 0.2, b.h + h, ang, machine);
+      for (const d of [-0.28, 0.28]) units.box(x + Math.cos(ang) * len * d, z + Math.sin(ang) * len * d, len * 0.28, wid * 0.72, b.h + h, b.h + h + 0.09, ang, vent);
+      occupied.push([x, z, radius]);
+      k++;
     }
   }
   for (const s of styles) {
     if (!walls[s].p.length) continue;
-    const mat = new THREE.MeshStandardMaterial({ map: facadeTexture(s), roughness: s === 'glass' ? 0.4 : 0.88, metalness: s === 'glass' ? 0.2 : 0 });
-    const m = new THREE.Mesh(walls[s].geometry(), mat); m.castShadow = m.receiveShadow = true; scene.add(m);
+    const mat = new THREE.MeshStandardMaterial({ map: facadeTexture(s), roughness: s === 'glass' ? 0.52 : 0.88, metalness: s === 'glass' ? 0.12 : 0 });
+    const m = new THREE.Mesh(walls[s].geometry(), mat); m.name = 'facade-' + s; m.castShadow = m.receiveShadow = true; scene.add(m);
   }
   const roofMesh = new THREE.Mesh(roofs.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }));
-  roofMesh.castShadow = roofMesh.receiveShadow = true; scene.add(roofMesh);
-  if (units.length) {
-    const g = new THREE.BoxGeometry(1, 1, 1); g.translate(0, 0.5, 0);
-    const im = new THREE.InstancedMesh(g, new THREE.MeshLambertMaterial({ color: '#7f7d77' }), units.length), m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
-    units.forEach(([x, y, z, w, h, d], i) => im.setMatrixAt(i, m4.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(w, h, d))));
-    im.receiveShadow = true; scene.add(im); ART.roofUnits = im;
+  roofMesh.name = 'building-roofs'; roofMesh.castShadow = roofMesh.receiveShadow = true; scene.add(roofMesh);
+  if (units.p.length) {
+    const m = new THREE.Mesh(units.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+    m.name = 'rooftop-plant'; m.castShadow = m.receiveShadow = true; scene.add(m); ART.roofUnits = m;
   }
   // water, quays and bridge decks
   const stone = new Batch(), quay = lin('#a39c8c'), deck = lin(COL.road), rail = lin(COL['paint-2']);
@@ -1778,7 +1822,7 @@ function buildCityArt(L) {
     list.forEach((t, i) => {
       q.setFromAxisAngle(up, artRand() * 6.28);
       im.setMatrixAt(i, m4.compose(new THREE.Vector3(t.x, 0, t.z), q, new THREE.Vector3(t.s, t.s * (0.9 + artRand() * 0.25), t.s)));
-      im.setColorAt(i, tint.setHSL(0.22 + artRand() * 0.1, 0.3, 0.34 + artRand() * 0.14).multiplyScalar(1.1));
+      im.setColorAt(i, tint.setRGB(0.83 + artRand() * 0.17, 0.87 + artRand() * 0.13, 0.82 + artRand() * 0.14));
     });
     im.castShadow = true; im.receiveShadow = true; im.userData.full = list.length; scene.add(im); ART.trees.push(im);
   }
@@ -1872,6 +1916,43 @@ function elevatedDecks() {
   }
   if (!b.p.length) return;
   const m = new THREE.Mesh(b.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 })); m.castShadow = m.receiveShadow = true; scene.add(m);
+}
+function streetDetails() {
+  const curb = new Batch(), paint = new Batch(), concrete = lin('#8c887e'), white = lin('#bbb8ac'), yellow = lin('#bca253');
+  for (const e of edges) {
+    const pts = e.pts.map((p) => W3(...p)), width = ROAD_W(e) * M3, deck = e.elevated ? ELEV_Y : 0;
+    const total = pts.reduce((s, p, i) => i ? s + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0, 0);
+    const trim = e.motorway ? 1 : Math.min(width * 0.7, total * 0.22);
+    let run = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const [ax, az] = pts[i - 1], [bx, bz] = pts[i], len = Math.hypot(bx - ax, bz - az); if (len < 0.05) continue;
+      const dx = (bx - ax) / len, dz = (bz - az) / len, ang = Math.atan2(dz, dx), start = Math.max(0, trim - run), end = Math.min(len, total - trim - run);
+      const stripe = (a, b, offset, w, col) => {
+        const x0 = ax + dx * a - dz * offset, z0 = az + dz * a + dx * offset, x1 = ax + dx * b - dz * offset, z1 = az + dz * b + dx * offset;
+        paint.quad([x0 + dz * w / 2, deck + 0.325, z0 - dx * w / 2], [x0 - dz * w / 2, deck + 0.325, z0 + dx * w / 2], [x1 - dz * w / 2, deck + 0.325, z1 + dx * w / 2], [x1 + dz * w / 2, deck + 0.325, z1 - dx * w / 2], col);
+      };
+      if (end > start) {
+        if (!e.motorway || e.elevated) for (const sign of [-1, 1]) {
+          const offset = sign * (width / 2 + (e.elevated ? 0.65 : 0.3)), cx = ax + dx * (start + end) / 2 - dz * offset, cz = az + dz * (start + end) / 2 + dx * offset;
+          if (insideService(cx / M3 + C3[0], cz / M3 + C3[1], SERVICE, (width / 2 + 1) / M3)) curb.box(cx, cz, end - start, e.elevated ? 0.34 : 0.45, deck + (e.elevated ? -0.1 : 0.3), deck + (e.elevated ? 0.7 : 0.48), ang, concrete);
+        }
+        if (!e.oneway) {
+          if (width >= 18) for (const offset of [-0.16, 0.16]) stripe(start, end, offset, 0.12, yellow);
+          else for (let d = Math.floor((run + start) / 11) * 11; d < run + end; d += 11) {
+            const a = Math.max(start, d - run), b = Math.min(end, d + 3.2 - run);
+            if (b > a) stripe(a, b, 0, 0.14, white);
+          }
+        }
+        if (e.motorway) for (const offset of [-width / 2 + 0.45, width / 2 - 0.45]) stripe(start, end, offset, 0.14, white);
+      }
+      run += len;
+    }
+  }
+  for (const [batch, name] of [[curb, 'street-curbs'], [paint, 'lane-paint']]) {
+    if (!batch.p.length) continue;
+    const mesh = new THREE.Mesh(batch.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }));
+    mesh.name = name; mesh.receiveShadow = true; scene.add(mesh);
+  }
 }
 const ELEV_Y = 9.9;
 /* ---------------- rider faces ---------------- */
@@ -2033,6 +2114,7 @@ function init3D() {
   { const mat = waterMaterial(); for (const w of LAY.rivers) { const geo = new THREE.ShapeGeometry(new THREE.Shape(w.pts.map(([x, z]) => new THREE.Vector2(x, -z)))); geo.rotateX(-Math.PI / 2); const m = new THREE.Mesh(geo, mat); m.position.y = 0.18; scene.add(m); } }
   drawServiceEdge();
   elevatedDecks();
+  streetDetails();
   // depots: chargers
   const postGeo = new THREE.BoxGeometry(3, 9, 3), postMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(COL.green), emissive: new THREE.Color(COL.green), emissiveIntensity: 0.25 });
   for (const dp of DEPOTS) { const N = nodes[dp.node]; for (let k = 0; k < dp.bays; k++) { const [x, z] = W3(N.x + 1.2 + k * 0.6, N.y + 1.2); const p = new THREE.Mesh(postGeo, postMat); p.scale.setScalar(0.5); p.position.set(x, 2.2, z); p.castShadow = true; scene.add(p); } }
