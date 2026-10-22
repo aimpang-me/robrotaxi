@@ -37,7 +37,7 @@ async function main() {
   async function open(headers = {}) {
     const req = http.get({ hostname: '127.0.0.1', port, path: '/stream', headers });
     const res = await new Promise((resolve, reject) => { req.on('response', resolve); req.on('error', reject); });
-    const client = { req, res, frames: [], wireBytes: 0, closed: false };
+    const client = { req, res, status: res.statusCode, frames: [], wireBytes: 0, closed: false };
     const decoder = res.headers['content-encoding'] === 'gzip' ? zlib.createGunzip() : res;
     res.on('data', (chunk) => { client.wireBytes += chunk.length; });
     let pending = '';
@@ -53,6 +53,12 @@ async function main() {
     res.on('close', () => { client.closed = true; });
     client.close = () => { req.destroy(); res.destroy(); if (decoder !== res) decoder.destroy(); };
     clients.push(client);
+    if (res.statusCode !== 200) { // e.g. the 503 watcher-cap response: read it as a plain body, not SSE
+      let body = ''; res.setEncoding('utf8'); res.on('data', (chunk) => { body += chunk; });
+      await new Promise((resolve) => res.on('end', resolve));
+      client.body = body;
+      return client;
+    }
     await waitFor(() => client.frames.length > 0, 'first snapshot did not arrive');
     return client;
   }
@@ -152,7 +158,13 @@ async function main() {
     assert.equal(watchers.get(g.id).size, 300);
     assert.equal(g.listeners.size, 1);
     const full = await open({ 'accept-encoding': 'gzip' });
-    assert.equal(full.frames[0], 'event: full\ndata: {}');
+    // The cap is an explicit 503 with a body a viewer can read; a named SSE "full" event used to be
+    // sent on a 200 stream, which EventSource.onmessage never sees (silent reconnect loop).
+    assert.equal(full.status, 503);
+    assert.equal(full.res.headers['retry-after'], '10');
+    assert.equal(full.res.headers['content-type'], 'text/plain; charset=utf-8');
+    assert(full.body.includes('viewer slots'), 'over-cap response explains the cap');
+    assert.equal(full.frames.length, 0, 'over-cap response is not an SSE packet');
     assert.equal(watchers.get(g.id).size, 300, 'full response does not bypass the cap');
     const beforeCrowd = clones, wiresBefore = crowd.map((client) => client.wireBytes);
     g.emit();

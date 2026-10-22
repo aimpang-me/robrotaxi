@@ -32,21 +32,54 @@ async function list(prefix) {
   return fs.existsSync(dir) ? fs.readdirSync(dir).map((f) => prefix + f) : [];
 }
 
-// results are kept in memory and written through, so the leaderboard never waits on storage
-let results = null, chain = Promise.resolve();
+// results are kept in memory and written through, so the leaderboard never waits on storage.
+// With an HTTP store, saves fail closed: nothing is written until the stored leaderboard has loaded, so a
+// failed or slow load can never replace it with a partial list. Results that finish before then are queued
+// in memory and merged into the first write after the load succeeds.
+let results = null, chain = Promise.resolve(), loading = null, queued = [];
 const parse = (t) => (t || '').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-async function loadResults() { const pending = results || []; results = parse(await get('results.jsonl')).concat(pending); return results.length; }
+const saveErr = (e) => console.error('[robrotaxi] saving run failed:', e.message);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const writeResults = () => put('results.jsonl', results.map((r) => JSON.stringify(r)).join('\n') + '\n');
+const writeLog = (game, log) => put(`logs/${game}.json`, JSON.stringify(log, null, 1));
+function loadResults() {
+  if (loading) return loading;
+  const run = (async () => {
+    if (!BASE) { results = parse(fs.existsSync(file('results.jsonl')) ? fs.readFileSync(file('results.jsonl'), 'utf8') : '').concat(queued.map((q) => q.sum)); queued = []; return results.length; }
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const stored = parse(await get('results.jsonl')), pending = queued;
+        queued = [];
+        results = stored.concat(pending.map((q) => q.sum)); // merge: rows saved while loading are kept, not dropped
+        if (pending.length) chain = writeResults().then(() => Promise.all(pending.map((q) => writeLog(q.sum.game, q.log)))).catch(saveErr);
+        return results.length;
+      } catch (e) {
+        if (attempt % 12 === 0) console.error('[robrotaxi] could not load results, retrying:', e.message); // keep retrying: queued results wait for the load
+        await sleep(5000);
+      }
+    }
+  })();
+  loading = run;
+  run.then(() => {}, () => { if (loading === run) loading = null; });
+  return run;
+}
 function allResults() {
-  if (!results) results = BASE ? [] : parse(fs.existsSync(file('results.jsonl')) ? fs.readFileSync(file('results.jsonl'), 'utf8') : '');
-  return results;
+  if (results) return results;
+  if (BASE) return []; // the stored leaderboard is empty until loadResults() succeeds (never written from here)
+  return (results = parse(fs.existsSync(file('results.jsonl')) ? fs.readFileSync(file('results.jsonl'), 'utf8') : ''));
 }
 function addResult(sum, log) {
+  if (BASE && !results) { // boot load not done yet: queue in memory, retry the load, never write
+    queued.push({ sum, log });
+    loadResults().catch(saveErr);
+    return chain;
+  }
   allResults().push(sum);
   chain = chain.then(async () => {
-    if (BASE) await put('results.jsonl', results.map((r) => JSON.stringify(r)).join('\n') + '\n');
+    if (BASE) await writeResults();
     else { fs.mkdirSync(RUNS_DIR, { recursive: true }); fs.appendFileSync(file('results.jsonl'), JSON.stringify(sum) + '\n'); }
-    await put(`logs/${sum.game}.json`, JSON.stringify(log, null, 1));
-  }).catch((e) => console.error('[robrotaxi] saving run failed:', e.message));
+    await writeLog(sum.game, log);
+  }).catch(saveErr);
   return chain;
 }
 
