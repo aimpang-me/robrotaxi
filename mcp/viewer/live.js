@@ -1,6 +1,52 @@
-// Live mode for the RobroTaxi pages: the server's game drives the map; the page only draws.
-// Injected by server.js into /view/2d and /view/3d. Needs ?game=<id>.
-(() => {
+class Playback {
+  constructor({ maxPackets = 240, maxBytes = 48 * 1024 * 1024 } = {}) {
+    this.maxPackets = maxPackets; this.maxBytes = maxBytes;
+    this.future = []; this.events = []; this.base = null;
+    this.time = null; this.sourceTime = null; this.lastAt = null;
+    this.bytes = 0; this.seenEvent = -1; this.resync = false;
+  }
+  push(packet, bytes = 0) {
+    const { meta, snap } = packet;
+    if (this.sourceTime != null && snap.t < this.sourceTime) return;
+    const first = snap.evTo - snap.events.length;
+    for (let i = 0; i < snap.events.length; i++) if (first + i > this.seenEvent) this.events.push(snap.events[i]);
+    this.seenEvent = Math.max(this.seenEvent, snap.evTo - 1);
+    const next = { meta, snap: { ...snap, events: [] }, bytes };
+    const last = this.future.at(-1);
+    if (last?.snap.t === snap.t) this.bytes -= this.future.pop().bytes;
+    this.future.push(next); this.bytes += bytes;
+    this.sourceTime = snap.t;
+    if (this.time == null) this.time = snap.t;
+    if (this.future.length > this.maxPackets || this.bytes > this.maxBytes || this.events.length > 4000) {
+      this.future = [next]; this.bytes = bytes; this.resync = true;
+      this.events = this.events.slice(-4000);
+    }
+  }
+  step(now, { paused = false, speed = 1, hidden = false } = {}) {
+    const dt = this.lastAt == null ? 0 : Math.max(0, Math.min(0.1, (now - this.lastAt) / 1000));
+    this.lastAt = now;
+    if (this.time == null) return { due: [], events: [], base: null, next: null, time: null, buffered: 0, resynced: false };
+    let resynced = false;
+    if (!paused) {
+      if (hidden || this.resync) { this.time = this.sourceTime; resynced = this.resync; this.resync = false; }
+      else {
+        const rate = Math.max(1, Math.min(60, (this.sourceTime - this.time) / 12)) * speed;
+        this.time = Math.min(this.sourceTime, this.time + dt * rate);
+      }
+    }
+    const due = [], events = [];
+    if (!paused || !this.base) {
+      while (this.future.length && this.future[0].snap.t <= this.time) {
+        this.base = this.future.shift(); this.bytes -= this.base.bytes; due.push(this.base);
+      }
+      while (this.events.length && this.events[0].t <= this.time) events.push(this.events.shift());
+    }
+    return { due, events, base: this.base, next: this.future[0] || null, time: this.time, buffered: this.sourceTime - this.time, resynced };
+  }
+}
+
+if (typeof module !== 'undefined') module.exports = Playback;
+if (typeof window !== 'undefined') (() => {
   const id = new URLSearchParams(location.search).get('game');
   const H = window.__robroLiveHooks;
   const is3d = location.pathname.endsWith('/3d');
@@ -8,6 +54,7 @@
   if (id && is3d && (typeof THREE === 'undefined' || !H)) { location.replace('/view/2d' + location.search); return; }
   if (!id || !H) return;
   window.__robroLive = true;
+  const playback = new Playback();
 
   const css = document.createElement('style');
   css.textContent = `
@@ -86,7 +133,7 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
   const whyBody = why.querySelector('.body'), whyBtn = why.querySelector('button');
   whyBtn.setAttribute('aria-expanded', 'true');
   whyBtn.addEventListener('click', () => { const m = why.dataset.min !== 'true'; why.dataset.min = String(m); whyBtn.textContent = m ? 'Show' : 'Hide'; whyBtn.setAttribute('aria-expanded', String(!m)); });
-  let external = false; const feed = []; let lastNote = null, lastMsg = performance.now(), finished = false;
+  let external = false; const feed = []; let lastNote = null, lastMsg = performance.now(), finished = false, resyncedUntil = 0;
   const clk = (t) => String(Math.floor(t / 3600) % 24).padStart(2, '0') + ':' + String(Math.floor(t / 60) % 60).padStart(2, '0');
   function takeEvents(evs, meta) {
     let changed = false;
@@ -110,22 +157,19 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
     }
     whyBody.append(ol);
   }
-  // when no update arrives, the sim is paused while the model thinks (the score counts sim time, not thinking time)
   setInterval(() => {
-    const el = $h('.think'); if (finished || !external) { el.textContent = ''; return; }
-    const idle = (performance.now() - lastMsg) / 1000;
-    el.textContent = ctl.paused ? 'Paused by you' : idle > 1.5 ? `Dispatcher thinking… ${Math.floor(idle)}s (game clock stopped)` : '';
+    const el = $h('.think'); if (finished) { el.textContent = ''; return; }
+    const now = performance.now(), idle = (now - lastMsg) / 1000;
+    const buffered = (playback.sourceTime ?? 0) - (playback.time ?? 0);
+    el.textContent = ctl.paused ? 'Paused by you' : now < resyncedUntil ? 'Viewer caught up after the playback buffer filled' : buffered > 0.1 ? `Playing accepted moves · ${Math.ceil(buffered)}s buffered` : external && idle > 1.5 ? 'Caught up · dispatcher thinking (ranked clock paused)' : '';
   }, 500);
 
-  /* ---- smooth motion: the server sends about 10 updates a second; between them each car glides
-     along its route at the display frame rate, and corners are rounded ---- */
-  const motion = new Map(); // car id -> { path, cum, from, to, t0, dur, ang, off }
+  const motion = new Map();
   const trafficMotion = new Map();
-  let lastAt = 0, gap = 120;
   const sameArr = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
   const cumOf = (path) => { const c = [0]; for (let i = 1; i < path.length; i++) c.push(c[i - 1] + (H.E(path[i - 1], path[i])?.len || 0)); return c; };
   const segAt = (cum, d) => { let i = 0; while (i < cum.length - 2 && cum[i + 1] <= d) i++; return i; };
-  function retarget(m, sc, now) {
+  function retarget(m, sc, now, duration) {
     const P = sc.path, cumP = cumOf(P), dT = cumP[Math.min(sc.seg, P.length - 1)] + (sc.seg < P.length - 1 ? sc.prog : 0);
     const cur = m.from + (m.to - m.from) * Math.min(1, (now - m.t0) / m.dur);
     let path = P, cum = cumP, from = dT, to = dT;
@@ -136,7 +180,7 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
         const offset = m.cum[overlap];
         if (cur >= offset) from = Math.min(cur - offset, dT);
         else { path = m.path.slice(0, overlap).concat(P); cum = cumOf(path); from = cur; to = offset + dT; }
-        Object.assign(m, { path, cum, from, to, t0: now, dur: Math.min(1000, gap * 1.15) });
+        Object.assign(m, { path, cum, from, to, t0: now, dur: duration });
         return;
       }
       // find where the car is drawn now on the new route, or join the old route onto it
@@ -151,7 +195,7 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
         if (j >= 0) { path = m.path.slice(0, j).concat(P); cum = cumOf(path); from = cur; to = cum[j] + dT; }
       }
     }
-    Object.assign(m, { path, cum, from, to, t0: now, dur: Math.min(1000, gap * 1.15) });
+    Object.assign(m, { path, cum, from, to, t0: now, dur: duration });
   }
   // pose at distance d along m.path: follows each road's real polyline, with corners rounded
   const LANE = 0.45; // right-hand lane offset in map units; the page adds it itself while a car is moving
@@ -177,7 +221,7 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
     return corner(i) || corner(i + 1) || p;
   }
   function place(c, m, now, dt) {
-    const d = m.from + (m.to - m.from) * Math.min(1, (now - m.t0) / m.dur);
+    const d = m.from + (m.to - m.from) * Math.max(0, Math.min(1, (now - m.t0) / m.dur));
     const p = poseOf(m, d);
     const moving = !!p && d < m.cum[m.cum.length - 1] - 0.01;
     if (p) m.ang = p.ang;
@@ -191,17 +235,55 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
     c.livePos = { x: x - Math.sin(a) * k, y: y + Math.cos(a) * k, ang: m.ang ?? c.ang };
     c.path = m.path; c.seg = moving ? i : m.path.length - 1; c.prog = moving ? d - m.cum[i] : 0;
   }
-  let lastFrame = performance.now();
+  function prepareMotion(base, next) {
+    const betweenSnapshots = (sc, previous, target, preservePlan) => {
+      const path = sc.path.slice(), cum = cumOf(path), d = cum[Math.min(sc.seg, path.length - 1)] + (sc.seg < path.length - 1 ? sc.prog : 0);
+      const m = { path, cum, from: d, to: d, t0: base.snap.t * 1000, dur: 1, ang: previous?.ang ?? sc.ang, off: previous?.off ?? 0 };
+      if (!target || next.snap.t <= base.snap.t || sc.roadActive === false) return m;
+      const candidate = { ...m };
+      retarget(candidate, target, m.t0, (next.snap.t - base.snap.t) * 1000);
+      if (preservePlan && !sameArr(candidate.path, path)) return m;
+      const a = poseOf(m, d) || H.nodes[path[0]], b = poseOf(candidate, candidate.from) || H.nodes[candidate.path[0]];
+      return Math.hypot(a.x - b.x, a.y - b.y) < 0.1 ? candidate : m;
+    };
+    for (const [key, map] of [['cars', motion], ['traffic', trafficMotion]]) {
+      const source = key === 'cars' ? base.snap.cars : base.snap.traffic?.vehicles || [];
+      const target = new Map((key === 'cars' ? next?.snap.cars || [] : next?.snap.traffic?.vehicles || []).map(sc => [sc.id, sc]));
+      const ids = new Set(source.map(sc => sc.id));
+      for (const sc of source) map.set(sc.id, betweenSnapshots(sc, map.get(sc.id), target.get(sc.id), key === 'cars'));
+      for (const id of map.keys()) if (!ids.has(id)) map.delete(id);
+    }
+  }
+  function drawTime(snap, time) {
+    const sc = snap.score, elapsed = sc.elapsedMin + (time - snap.t) / 60;
+    const label = sc.finished ? `finished in ${(sc.finishMin / 60).toFixed(2)} h` : sc.outOfTime ? 'out of time' : `${Math.floor(elapsed / 60)}h ${String(Math.floor(elapsed % 60)).padStart(2, '0')}m`;
+    if ($h('.time').textContent !== label) $h('.time').textContent = label;
+    const clock = document.getElementById('clock'); if (clock && clock.textContent !== clk(time)) clock.textContent = clk(time);
+  }
+  let lastFrame = performance.now(), preparedBase = null, preparedNext = null;
   function animate(now) {
     const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
-    const S = H.main();
-    for (const c of S.cars) { const m = motion.get(c.id); if (m) place(c, m, now, dt); }
-    for (const v of S.traffic?.vehicles || []) { const m = trafficMotion.get(v.id); if (m) place(v, m, now, dt); }
+    const frame = playback.step(now, { ...ctl, hidden: document.hidden });
+    for (const packet of frame.due) apply(packet.meta, packet.snap);
+    if (frame.base) {
+      const S = H.main();
+      if (frame.base !== preparedBase || frame.next !== preparedNext) {
+        prepareMotion(frame.base, frame.next); preparedBase = frame.base; preparedNext = frame.next;
+      }
+      S.t = frame.time;
+      for (const c of S.cars) { const m = motion.get(c.id); if (m) place(c, m, frame.time * 1000, ctl.paused ? 0 : dt); }
+      for (const v of S.traffic?.vehicles || []) { const m = trafficMotion.get(v.id); if (m) place(v, m, frame.time * 1000, ctl.paused ? 0 : dt); }
+      for (const e of frame.events) { if (e.kind === 'fare') continue; S.t = e.t; H.log(e); }
+      S.t = frame.time;
+      takeEvents(frame.events, frame.base.meta);
+      drawTime(frame.base.snap, frame.time);
+      if (frame.resynced) resyncedUntil = now + 5000;
+    }
     requestAnimationFrame(animate);
   }
   requestAnimationFrame(animate);
 
-  function sync(W, d, smooth) {
+  function sync(W, d) {
     const reqMap = new Map(), now = performance.now();
     W.reqs = d.reqs.map((r) => { const o = { ...r, car: null }; reqMap.set(o.id, o); return o; });
     for (const sc of d.cars) {
@@ -210,11 +292,7 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
       Object.assign(c, { state: sc.state, roadActive: sc.roadActive, battery: sc.battery, chargeTo: sc.chargeTo, plugged: sc.plugged,
         queueT: sc.queueT, holdUntil: sc.holdUntil, strandUntil: sc.strandUntil, routeVer: sc.routeVer });
       c.parkNode = sc.roadActive === false ? sc.path[sc.seg] : null;
-      if (smooth) {
-        let m = motion.get(sc.id);
-        if (!m) { m = { path: [], cum: [0], from: 0, to: 0, t0: now, dur: 1, ang: c.ang, off: 0 }; motion.set(sc.id, m); }
-        retarget(m, sc, now); place(c, m, now, 0);
-      } else { delete c.livePos; Object.assign(c, { path: sc.path, seg: sc.seg, prog: sc.prog, x: sc.x, y: sc.y }); }
+      delete c.livePos; Object.assign(c, { path: sc.path, seg: sc.seg, prog: sc.prog, x: sc.x, y: sc.y });
       c.depot = H.DEPOTS.find((x) => x.name === sc.depot) || null;
       c.job = sc.job ? reqMap.get(sc.job) || null : null; if (c.job) c.job.car = c;
       c.next = sc.next ? reqMap.get(sc.next) || null : null; if (c.next) c.next.car = c;
@@ -223,28 +301,18 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
     const previous = new Map((W.traffic?.vehicles || []).map((v) => [v.id, v]));
     W.traffic = { vehicles: (d.traffic?.vehicles || []).map((sc) => {
       const v = previous.get(sc.id) || { ...sc };
-      Object.assign(v, { model: sc.model, color: sc.color, length: sc.length, speed: sc.speed, routeVer: sc.routeVer });
-      if (smooth) {
-        let m = trafficMotion.get(sc.id);
-        if (!m) { m = { path: [], cum: [0], from: 0, to: 0, t0: now, dur: 1, ang: sc.ang, off: 1 }; trafficMotion.set(sc.id, m); }
-        retarget(m, sc, now); place(v, m, now, 0);
-      } else Object.assign(v, sc);
+      delete v.livePos; Object.assign(v, sc);
       return v;
     }) };
-    if (smooth) {
-      const ids = new Set(W.traffic.vehicles.map((v) => v.id));
-      for (const id of trafficMotion.keys()) if (!ids.has(id)) trafficMotion.delete(id);
-    }
   }
   let announced = false;
   function apply(meta, snap) {
-    lastMsg = performance.now(); finished = !!(snap.score.finished || snap.score.outOfTime); external = meta.mode === 'external'; why.hidden = !external;
+    finished = !!(snap.score.finished || snap.score.outOfTime); external = meta.mode === 'external'; why.hidden = !external;
     if (!announced) document.getElementById('feed').replaceChildren();
     H.setSeed(meta.seed);
     const S = H.main();
     Object.assign(S, { t: snap.t, agent: snap.agent, agentSince: snap.agentSince, connectT: snap.connectT, rph: snap.rph, hazIdx: snap.hazIdx, rush: snap.rush, paused: false });
-    const at = performance.now(); if (lastAt && at - lastAt < 1500) gap = gap * 0.8 + (at - lastAt) * 0.2; lastAt = at;
-    sync(S, snap, true);
+    sync(S, snap);
     S.periods = snap.periods; S.waitSeries = snap.waitSeries;
     if (snap.shadow) {
       if (!H.shadow()) H.setShadow(H.cloneWorld(S));
@@ -253,13 +321,9 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
     S.incidents.length = 0;
     for (const i of snap.incidents) S.incidents.push({ ...i, edge: H.edges[i.edge] });
     H.recomputeTraffic();
-    const now = S.t;
-    for (const e of snap.events) { if (e.kind === 'fare') continue; S.t = e.t; H.log(e); }
-    S.t = now;
     H.setAgentUI();
     lockViewerControls();
     // HUD
-    takeEvents(snap.events, meta);
     const sc = snap.score;
     if (!announced) {
       announced = true; document.title = `${meta.player} · ${meta.model} · RobroTaxi live`;
@@ -273,13 +337,11 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
     $h('.who b').textContent = meta.player; $h('.who .muted').textContent = `${meta.model} · seed ${meta.seed}${meta.ranked ? ' ranked' : ''}`;
     $h('.rev').textContent = `${money(sc.revenue)} / $1,000,000`;
     $h('.bar i').style.width = Math.max(0, Math.min(100, sc.progress * 100)).toFixed(1) + '%';
-    const h = Math.floor(sc.elapsedMin / 60), m = Math.floor(sc.elapsedMin % 60);
-    $h('.time').textContent = sc.finished ? `finished in ${(sc.finishMin / 60).toFixed(2)} h` : sc.outOfTime ? 'out of time' : `${h}h ${String(m).padStart(2, '0')}m`;
     hud.dataset.done = String(!!sc.finished);
     $h('.live').textContent = sc.finished ? 'FINISHED' : sc.outOfTime ? 'ENDED' : 'LIVE';
   }
 
   const es = new EventSource(`/live/${encodeURIComponent(id)}/stream`);
-  es.onmessage = (ev) => { try { const { meta, snap, ctl: c } = JSON.parse(ev.data); if (c && (c.speed !== ctl.speed || c.paused !== ctl.paused)) { ctl = c; drawCtl(); } apply(meta, snap); } catch (err) { console.error('live update failed', err); } };
+  es.onmessage = (ev) => { try { const packet = JSON.parse(ev.data), c = packet.ctl; lastMsg = performance.now(); if (c && (c.speed !== ctl.speed || c.paused !== ctl.paused)) { ctl = c; drawCtl(); } playback.push(packet, ev.data.length * 2); } catch (err) { console.error('live update failed', err); } };
   es.onerror = () => { $h('.live').textContent = 'OFFLINE'; };
 })();
