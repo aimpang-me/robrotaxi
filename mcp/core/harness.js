@@ -248,9 +248,10 @@ function advance(maxS, stopOnEvent, minS = 20, why = []) {
 /* ---------- live view snapshot (for the browser pages) ---------- */
 function liveSnap(evFrom) {
   const reqOut = (r) => ({ ...r, car: r.car ? r.car.id : null });
-  const carOut = (c) => ({ id: c.id, path: c.path, seg: c.seg, prog: c.prog, x: c.x, y: c.y, state: c.state, battery: c.battery, job: c.job ? c.job.id : null, next: c.next ? c.next.id : null, depot: c.depot ? c.depot.name : null, chargeTo: c.chargeTo, plugged: !!c.plugged, queueT: c.queueT, holdUntil: c.holdUntil, strandUntil: c.strandUntil, routeVer: c.routeVer, known: [...c.known] });
+  const carOut = (c) => ({ id: c.id, path: c.path, seg: c.seg, prog: c.prog, x: c.x, y: c.y, speed: c.speed, state: c.state, battery: c.battery, job: c.job ? c.job.id : null, next: c.next ? c.next.id : null, depot: c.depot ? c.depot.name : null, chargeTo: c.chargeTo, plugged: !!c.plugged, queueT: c.queueT, holdUntil: c.holdUntil, strandUntil: c.strandUntil, routeVer: c.routeVer, known: [...c.known] });
   return {
     t: S.t, seed: SEED, rph: Math.round(S.rph * DEMAND), agent: S.agent, agentSince: S.agentSince, connectT: S.connectT, hazIdx: S.hazIdx, rush: S.rush,
+    traffic: { vehicles: S.traffic.vehicles.map(({ id, model, color, length, path, seg, prog, speed, x, y, ang, routeVer }) => ({ id, model, color, length, path: [...path], seg, prog, speed, x, y, ang, routeVer })) },
     cars: S.cars.map(carOut), reqs: S.reqs.map(reqOut), incidents: S.incidents.map((i) => ({ id: i.id, type: i.type, edge: i.edge.id, until: i.until, seen: i.seen, seenBy: i.seenBy, src: i.src })),
     periods: S.periods, waitSeries: S.waitSeries.slice(-120),
     shadow: SHADOW ? { periods: SHADOW.periods, cars: SHADOW.cars.map(carOut), reqs: SHADOW.reqs.map(reqOut), waitSeries: SHADOW.waitSeries.slice(-120) } : null,
