@@ -1694,13 +1694,17 @@ function waterMaterial() {
   const mat = new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { deep: { value: lin(PAL.deep) }, shallow: { value: lin(PAL.shallow) }, sky: { value: lin(PAL.horizon) }, sun: { value: lin(PAL.sun) }, sunDir: { value: new THREE.Vector3(-380, 620, -260).normalize() } }]),
     vertexShader: `varying vec3 vW;
+      #include <common>
       #include <fog_pars_vertex>
+      #include <logdepthbuf_pars_vertex>
       void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
+      #include <logdepthbuf_vertex>
       }`,
     fragmentShader: `uniform float uTime; uniform vec3 deep, shallow, sky, sun, sunDir; varying vec3 vW;
       const float WATER_K = ${WATER_K.toFixed(3)};
       #include <fog_pars_fragment>
+      #include <logdepthbuf_pars_fragment>
       vec2 wave(vec2 p, vec2 d, float f, float s, float a) { return d * cos(dot(p, d) * f + uTime * s) * a; }
       void main() {
         vec2 p = vW.xz * WATER_K, g = wave(p, vec2(0.8, 0.6), 0.9, 0.35, 0.16) + wave(p, vec2(-0.45, 0.89), 1.7, 0.55, 0.10) + wave(p, vec2(0.96, -0.28), 3.1, 0.75, 0.055);
@@ -1714,6 +1718,7 @@ function waterMaterial() {
         col += sun * pow(max(dot(n, normalize(sunDir + v)), 0.0), 256.0) * 0.08;
         gl_FragColor = linearToOutputTexel(vec4(col, 1.0));
         #include <fog_fragment>
+        #include <logdepthbuf_fragment>
       }`,
     fog: true,
   });
@@ -2150,7 +2155,7 @@ function renderAvatars(now) {
 }
 function init3D() {
   const host = $('three');
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, logarithmicDepthBuffer: true });
   renderer.setPixelRatio(Math.min(2, devicePixelRatio));
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -2215,7 +2220,7 @@ function init3D() {
     // route ribbon
     const max = 600;
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(max * 6 * 3), 3));
-    const rmat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
+    const rmat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.72, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
     const ribbon = new THREE.Mesh(geo, rmat); ribbon.renderOrder = 2; ribbon.frustumCulled = false; scene.add(ribbon);
     const tag = document.createElement('span'); tag.className = 'tag3d'; tag.textContent = c.num; tagLayer.append(tag);
     carMeshes.set(c, { g, body, lamp, ribbon, rmat, max, tag, base: 4.445 / 20 });
@@ -2291,7 +2296,7 @@ function placeTag(el, x, y, z) {
   el.style.transform = `translate(${((vTmp.x + 1) / 2 * w).toFixed(1)}px, ${((1 - vTmp.y) / 2 * h).toFixed(1)}px) translate(-50%, -100%)`;
 }
 function writeRibbon(m, pts, drawn) {
-  const pos = m.ribbon.geometry.attributes.position.array; let n = 0, acc = 0; const hw = 0.35;
+  const pos = m.ribbon.geometry.attributes.position.array; let n = 0, acc = 0; const hw = 0.45;
   if (drawn <= 0) { m.ribbon.geometry.setDrawRange(0, 0); return; }
   for (let i = 1; i < pts.length && n < m.max * 6; i++) {
     const [ax, az, ay] = pts[i - 1]; let [bx, bz, by] = pts[i];
@@ -2353,7 +2358,7 @@ function renderMap(now) {
     const k = reduceMotion ? 1 : Math.min(1, (now - c.drawT) / 700);
     writeRibbon(m, pts, L * (1 - Math.pow(1 - k, 3)));
     m.rmat.color.set(COL[ROUTE_COL[st]]);
-    m.rmat.opacity = S.selected === c ? 0.8 : S.selected ? 0.08 : 0.55;
+    m.rmat.opacity = S.selected === c ? 0.9 : S.selected ? 0.16 : 0.72;
     m.ribbon.visible = true;
   }
   renderAvatars(now);

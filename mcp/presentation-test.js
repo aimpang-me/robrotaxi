@@ -95,7 +95,7 @@ const atNear = Array.from(geometry.attributes.position.array);
 ribbonContext.MK = 14;
 ribbonContext.writeRibbon({ ribbon: { geometry }, max: 1 }, [[0, 0, 0], [100, 0, 10]], 50);
 assert.deepEqual(Array.from(geometry.attributes.position.array), atNear, 'route paint width and road clearance stay in metres at every camera distance');
-assert(Math.abs(Math.abs(geometry.attributes.position.array[2] - geometry.attributes.position.array[8]) - 0.7) < 1e-5, 'partially drawn route paint keeps its 0.7 metre width');
+assert(Math.abs(Math.abs(geometry.attributes.position.array[2] - geometry.attributes.position.array[8]) - 0.9) < 1e-5, 'partially drawn route paint keeps its 0.9 metre width');
 const roofContext = vm.createContext({});
 vm.runInContext(['inPoly', 'roofBoxFits'].map((name) => functionOf(pages[1], name)).join('\n'), roofContext);
 const roof = [[0, 0], [20, 0], [20, 20], [0, 20]];
