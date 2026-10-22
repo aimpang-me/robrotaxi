@@ -131,7 +131,7 @@ function options(riderId, limit = 4) {
     const a = pathStats(path, chained ? 0 : c.prog);
     const pickT = a.t + lead.t + (c.state === 'charging' || c.state === 'tocharge' ? 0 : 0);
     const startBat = c.battery - lead.pct, left = startBat - a.pct - trip.pct;
-    cands.push({ car: c.id, state: c.state, pickupMin: r1(pickT / 60), emptyKm: r1(a.px / 100), batteryNow: r1(c.battery), batteryAtDropoff: r1(left), canReachChargerAfter: left - backPct >= 0, safe: left - backPct >= RESERVE });
+    cands.push({ car: c.id, state: c.state, pickupMin: r1(pickT / 60), emptyKm: r1(a.px / 100), batteryNow: r1(c.battery), batteryAtDropoff: r1(left), canReachChargerAfter: !!bestDepotByTime(r.to, left), safe: !!after && left - backPct >= RESERVE });
   }
   cands.sort((x, y) => x.pickupMin - y.pickupMin);
   const wNow = S.t - r.t0;

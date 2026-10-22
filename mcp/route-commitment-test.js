@@ -42,4 +42,18 @@ for (const action of ['release', 'cancel', 'strand']) {
 assert.equal(probe(`S.external = false; agentDispatchAll(); return r.status;`, 16), 'waiting', 'scripted dispatcher uses the same committed pickup and reserve');
 const scripted = probe(`S.external = false; agentDispatchAll(); return { eta: r.etaT - S.t, actual: remaining(c).t, status: r.status };`, 80);
 assert.equal(scripted.status, 'assigned'); assert(Math.abs(scripted.eta - scripted.actual) < 1e-8);
+for (const margin of [.25, .75]) {
+  const context = vm.createContext({ console }); new vm.Script(source).runInContext(context);
+  const result = JSON.parse(JSON.stringify(vm.runInContext(`(() => {
+    API.gameInit({ seed: 1101, mode: 'external', shadow: false });
+    const to = 291, from = adj[to][0].to, after = bestDepotByTime(to), trip = pathStats(dijkstra(from, to, timeW).path);
+    const c = S.cars[0]; Object.assign(c, { path: [from], seg: 0, prog: 0, state: 'idle', roadActive: false, battery: trip.pct + after.st.pct + ${margin}, job: null, next: null });
+    S.cars = [c]; S.reqs = []; const r = spawnRequest(from, to), option = options(r.id, 10).cars[0];
+    c.path = [to]; c.battery -= trip.pct;
+    let accepted = true; try { actCharge(c.id, 'best', 90, 'fixture'); } catch { accepted = false; }
+    return { option, accepted };
+  })()`, context)));
+  assert.equal(result.option.canReachChargerAfter, result.accepted, 'charger flag and automatic selection must use the same unrounded arrival margin');
+  assert.equal(result.accepted, margin >= .5);
+}
 console.log('Committed route checks pass for MCP and scripted pickup estimates, reserve, automatic charging, release, cancellation and stranded occupancy.');
