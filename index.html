@@ -250,9 +250,10 @@ main {
 .hover-edge { stroke-width: 9px; vector-effect: non-scaling-stroke; stroke-opacity: .6; fill: none; stroke-linecap: round; pointer-events: none; }
 .jam-line { stroke: var(--orange); stroke-width: 6px; vector-effect: non-scaling-stroke; fill: none; stroke-linecap: round; stroke-dasharray: 6 3; pointer-events: none; }
 .crash-line { stroke: var(--red); stroke-width: 7px; vector-effect: non-scaling-stroke; fill: none; stroke-dasharray: 5 4; pointer-events: none; }
-.route { fill: none; stroke-width: 3.5px; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; transition: opacity .25s; }
-.route-under { fill: none; stroke: var(--road); stroke-width: 6.5px; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; opacity: .7; }
-.dim .route:not(.sel), .dim .route-under:not(.sel) { opacity: .18; }
+.route { fill: none; stroke-width: 1.8px; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; opacity: .55; transition: opacity .25s; }
+.route.sel { opacity: .8; }
+.route-under { fill: none; stroke: var(--road); stroke-width: 3.6px; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; opacity: .45; }
+.dim .route:not(.sel), .dim .route-under:not(.sel) { opacity: .08; }
 .car { cursor: pointer; }
 .car-body { fill: var(--paint); stroke: var(--road); stroke-width: 1.4; }
 .car-glass { fill: var(--road); }

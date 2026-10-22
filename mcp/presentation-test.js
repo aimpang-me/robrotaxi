@@ -77,5 +77,10 @@ const geometry = { attributes: { position: { array: new Float32Array(18) } }, se
 ribbonContext.writeRibbon({ ribbon: { geometry }, max: 1 }, [[0, 0, 9.9], [100, 0, 9.9]], 100);
 for (let i = 1; i < 18; i += 3) assert(geometry.attributes.position.array[i] > 9.9, 'elevated route paint stays above the road deck');
 ribbonContext.writeRibbon({ ribbon: { geometry }, max: 1 }, [[0, 0, 0], [100, 0, 10]], 50);
-assert(Math.abs(geometry.attributes.position.array[4] - 6.2) < 1e-5, 'partially drawn route paint interpolates its endpoint height');
+assert(Math.abs(geometry.attributes.position.array[4] - 5.35) < 1e-5, 'partially drawn route paint interpolates its endpoint height');
+const atNear = Array.from(geometry.attributes.position.array);
+ribbonContext.MK = 14;
+ribbonContext.writeRibbon({ ribbon: { geometry }, max: 1 }, [[0, 0, 0], [100, 0, 10]], 50);
+assert.deepEqual(Array.from(geometry.attributes.position.array), atNear, 'route paint width and road clearance stay in metres at every camera distance');
+assert(Math.abs(Math.abs(geometry.attributes.position.array[2] - geometry.attributes.position.array[8]) - 0.7) < 1e-5, 'partially drawn route paint keeps its 0.7 metre width');
 console.log('Presentation syntax, boundary parity and clearance, heading timing and retention, render isolation, and elevated route paint passed.');

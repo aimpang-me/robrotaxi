@@ -1451,7 +1451,7 @@ const LANE = 0.45;         // right-hand lane offset from the centreline, units
 const flatPts = (f) => { const o = []; for (let i = 0; i < f.length; i += 2) o.push([f[i], f[i + 1]]); return o; };
 function bldRing(b) { const pts = []; let x = 0, y = 0; for (let i = 2; i < b.length && typeof b[i] === 'number'; i += 2) { x += b[i]; y += b[i + 1]; pts.push([x / 10, y / 10]); } return pts; }
 const WATER_K = 0.12;      // waves were tuned for 10 m units; the world is in metres now
-let MK = 1;                // marker scale: cars, pins and signs grow as the camera pulls back so they stay readable
+let MK = 1;                // pins, labels and selection rings grow as the camera pulls back
 let has3D = false;
 let renderer, scene, camera, controls, ground, raycaster, tagLayer;
 const carMeshes = new Map();
@@ -2061,7 +2061,7 @@ function init3D() {
     // route ribbon
     const max = 600;
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(max * 6 * 3), 3));
-    const rmat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
+    const rmat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
     const ribbon = new THREE.Mesh(geo, rmat); ribbon.renderOrder = 2; ribbon.frustumCulled = false; scene.add(ribbon);
     const tag = document.createElement('span'); tag.className = 'tag3d'; tag.textContent = c.num; tagLayer.append(tag);
     carMeshes.set(c, { g, body, lamp, ribbon, rmat, max, tag, base: 4.445 / 20 });
@@ -2137,15 +2137,16 @@ function placeTag(el, x, y, z) {
   el.style.transform = `translate(${((vTmp.x + 1) / 2 * w).toFixed(1)}px, ${((1 - vTmp.y) / 2 * h).toFixed(1)}px) translate(-50%, -100%)`;
 }
 function writeRibbon(m, pts, drawn) {
-  const pos = m.ribbon.geometry.attributes.position.array; let n = 0, acc = 0; const hw = 0.9 * MK;
+  const pos = m.ribbon.geometry.attributes.position.array; let n = 0, acc = 0; const hw = 0.35;
   if (drawn <= 0) { m.ribbon.geometry.setDrawRange(0, 0); return; }
   for (let i = 1; i < pts.length && n < m.max * 6; i++) {
     const [ax, az, ay] = pts[i - 1]; let [bx, bz, by] = pts[i];
     const seg = Math.hypot(bx - ax, bz - az); if (seg < 0.01) continue;
+    const dx = (bx - ax) / seg, dz = (bz - az) / seg;
     if (acc + seg > drawn) { const f = (drawn - acc) / seg; bx = ax + (bx - ax) * f; bz = az + (bz - az) * f; by = ay + (by - ay) * f; }
-    const nx = -(bz - az) / seg * hw, nz = (bx - ax) / seg * hw, ex = (bx - ax) / seg * hw, ez = (bz - az) / seg * hw;
+    const nx = -dz * hw, nz = dx * hw, ex = dx * hw, ez = dz * hw;
     const a1 = [ax - nx - ex, az - nz - ez, ay], a2 = [ax + nx - ex, az + nz - ez, ay], b1 = [bx - nx + ex, bz - nz + ez, by], b2 = [bx + nx + ex, bz + nz + ez, by];
-    for (const p of [a1, b1, a2, a2, b1, b2]) { pos.set([p[0], p[2] + 0.9 + Math.min(4, MK * 0.3), p[1]], n * 3); n++; }
+    for (const p of [a1, b1, a2, a2, b1, b2]) { pos.set([p[0], p[2] + 0.35, p[1]], n * 3); n++; }
     acc += seg; if (acc >= drawn) break;
   }
   m.ribbon.geometry.setDrawRange(0, n); m.ribbon.geometry.attributes.position.needsUpdate = true;
@@ -2178,7 +2179,7 @@ function renderMap(now) {
     let ox = 0, oy = 0;
     if (c.seg < c.path.length - 1) { ce = E(c.path[c.seg], c.path[c.seg + 1]); const a = target * Math.PI / 180, o = ce && ce.oneway ? 0 : LANE; ox = -Math.sin(a) * o; oy = Math.cos(a) * o; }
     const [x, z] = W3(p.x + ox, p.y + oy);
-    m.g.position.set(x, ce && ce.elevated ? ELEV_Y : 0, z); m.g.rotation.y = -heading * Math.PI / 180; m.g.scale.setScalar(m.base * MK);
+    m.g.position.set(x, ce && ce.elevated ? ELEV_Y : 0, z); m.g.rotation.y = -heading * Math.PI / 180; m.g.scale.setScalar(m.base);
     m.lamp.material = MAT['lamp-' + (LAMP[c.state] || 'paint-2')];
     m.body.material = c.state === 'stranded' ? MAT.red : (m.bodyMat || MAT.paint);
     m.tag.dataset.sel = String(S.selected === c);
@@ -2191,7 +2192,7 @@ function renderMap(now) {
     const k = reduceMotion ? 1 : Math.min(1, (now - c.drawT) / 700);
     writeRibbon(m, pts, L * (1 - Math.pow(1 - k, 3)));
     m.rmat.color.set(COL[ROUTE_COL[st]]);
-    m.rmat.opacity = S.selected && S.selected !== c ? 0.22 : 0.95;
+    m.rmat.opacity = S.selected === c ? 0.8 : S.selected ? 0.08 : 0.55;
     m.ribbon.visible = true;
   }
   renderAvatars(now);
