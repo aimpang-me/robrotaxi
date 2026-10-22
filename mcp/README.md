@@ -63,6 +63,10 @@ The server also runs a viewer (stdio mode: port 8787, change with `--view-port`,
 
 The viewer patches the demo pages in memory when serving them; it does not edit `index.html` or `index-3d.html`.
 
+Both views have a Sound button and volume control. Sound starts off. Enable it to hear city ambience and nearby moving vehicles; zoom in for a louder street mix. Pause and mute silence the mix. The [ElevenLabs sound pack](viewer/audio/README.md) records asset sources and its noncommercial Free-plan restriction.
+
+Spectators share one snapshot serialization per game update. The server offers gzip streaming and bounds slow clients to one pending packet. Same-turn model actions share a packet while retaining every decision event. Reconnecting viewers receive a full snapshot.
+
 ## Tools
 
 | Tool | What it does |

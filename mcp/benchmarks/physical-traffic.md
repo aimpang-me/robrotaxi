@@ -6,9 +6,9 @@ All 20 final reference replays preserve the pre-change dispatcher order on every
 
 | Dispatcher | 1101 | 2207 | 3313 | 4421 | 5531 |
 |---|---|---|---|---|---|
-| executor | 19.85 h | DNF $972k | DNF $929k | 23.07 h | 17.47 h |
-| scripted | 14.07 h | 14.12 h | 13.82 h | 14.14 h | 14.03 h |
-| lazy | 22.10 h | DNF $796k | DNF $789k | DNF $899k | 19.37 h |
+| executor | 19.99 h | DNF $967k | DNF $942k | 23.45 h | 17.87 h |
+| scripted | 13.69 h | 14.14 h | 13.62 h | 14.14 h | 13.90 h |
+| lazy | 21.97 h | DNF $806k | DNF $771k | DNF $898k | 19.37 h |
 | greedy | 11.86 h | 11.31 h | 11.13 h | 11.32 h | 13.06 h |
 
 ## Before physical traffic
@@ -28,15 +28,17 @@ From mcp/:
 
 ```sh
 node bench.js
-node check-bench.js benchmarks/physical-traffic-before.json benchmarks/physical-traffic-after.json
+node check-bench.js benchmarks/physical-traffic-before.json benchmarks/route-commitment-after.json
+node check-bench.js benchmarks/physical-traffic-after.json benchmarks/route-commitment-after.json
 ```
 
-The saved JSON files retain the scores used by the order check. Final physics is commit 7e16aa4, generated-core SHA256 `93bd68d62d8c8b7985beb61c6b9784d2de3f07d4970ab7350d6b4115f3f5cf10`. Worker concurrency changes wall-clock runtime only. To capture a fresh replay set ROBRO_BENCH_OUTPUT to a JSON path; ROBRO_BENCH_JOBS controls bounded independent workers.
+The saved JSON files retain the scores used by the order check. The final replay includes the committed-road estimate and interruption fixes in commit 171739e. Its generated-core SHA256 is `5186ea6071969600d84516445b4f717a55a00170d5f7faba8232bd15c555cc70`. The earlier traffic-only replay remains in physical-traffic-after.json. Worker concurrency changes wall-clock runtime only. To capture a fresh replay set ROBRO_BENCH_OUTPUT to a JSON path; ROBRO_BENCH_JOBS controls bounded independent workers.
 
 ## Scope and checks
 
 - 240 seeded ambient vehicles and taxis share directed-lane gaps and unsignalized junction reservations. Ambient routes circulate on through streets; taxis retain access to terminal streets. This avoids destination-free bus tours through short dead ends and is not a general gridlock solver.
 - 21 physical fixtures cover following, parking admission, blocked departures, occupied exits, tiny connectors, turnaround clearance, circulation, legal routes, hidden hazards, clone isolation and deterministic tick batching.
+- Route commitment checks cover pickup and charger estimates, battery reserve, release, cancellation and stranded occupancy. An independent sweep checked 220 route positions and 18 dispatch estimates against assigned routes.
 - Real server pacing checks preserve the full authoritative snapshot across pause and playback speeds. Viewer checks cover authoritative movement and repeated-edge interpolation. Both page simulations match; the extracted core rebuild is verified.
 - MCP-only integration (scripted test stub, no LLM): 702.5 sim minutes, 598 trips, 145 cancellations, zero stranded; 2186 tool calls.
 - Shoreline tests cover mainland, harbour slips, Don River, mapped pond islets, source-linked import fixes and browser map parity. All 18,204 retained building centroids have land and none is covered by water fill. Island House's full packed footprint stays dry. The map retains metre-scale footprint and shore simplification; one inherited Heaslip House corner overlaps the Devonian Pond outline by about 1.66 m.
