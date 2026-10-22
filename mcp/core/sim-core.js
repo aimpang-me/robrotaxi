@@ -86,7 +86,6 @@ edges.forEach((e) => {
   e.mx = m.x; e.my = m.y;
   e.rushy = e.motorway || DISTRICTS.some((d) => d.w >= 1.5 && Math.hypot(m.x - d.x, m.y - d.y) < 65);
 });
-// Public road load remains a planning estimate; physical vehicles also constrain each accepted movement.
 const DIST_PEAK = Math.max(...nodes.map((n) => DISTRICTS.reduce((s, d) => s + d.w * Math.exp(-((n.x - d.x) ** 2 + (n.y - d.y) ** 2) / (2 * 110 * 110)), 0)));
 edges.forEach((e) => {
   const g = DISTRICTS.reduce((s, d) => s + d.w * Math.exp(-((e.mx - d.x) ** 2 + (e.my - d.y) ** 2) / (2 * 110 * 110)), 0) / DIST_PEAK;
@@ -187,7 +186,7 @@ function initCars() {
     const n = usable[Math.floor(rC() * usable.length)];
     Object.assign(c, { path: [n], seg: 0, prog: 0, x: nodes[n].x, y: nodes[n].y, ang: 0, battery: c.i === low ? 12 + rC() * 10 : 30 + rC() * 65, state: 'idle', job: null, next: null, depot: null, chargeTo: 0, holdUntil: 0, holdEdge: null, lastLowLog: 0 });
     c.known.clear(); c.routeVer++;
-    c.roadTrail = []; c.roadDistance = 0; c.waitSince = null; c.speed = 0;
+    c.roadActive = false; c.roadTrail = []; c.roadDistance = 0; c.waitSince = null; c.speed = 0;
   }
   initTraffic(S, SEED);
 }
@@ -663,7 +662,6 @@ function expireIncidents() {
   }
 }
 
-/* ---------------- physical road traffic ---------------- */
 const ROAD_GAP = 0.2, NODE_CLEARANCE = 0.12, ROAD_STEP = 0.5;
 const TRAFFIC_MODELS = [
   { model: 'sedan', length: 0.48 }, { model: 'hatch', length: 0.44 },
@@ -778,7 +776,7 @@ function roadTrafficStep(dt) {
   traffic.clock += dt;
   const ambient = new Set(traffic.vehicles), actors = [...S.cars, ...traffic.vehicles];
   const byId = new Map(actors.map((v) => [v.id, v]));
-  const onRoad = (v) => v.seg < v.path.length - 1 && (ambient.has(v) || !['idle', 'charging'].includes(v.state));
+  const onRoad = (v) => v.seg < v.path.length - 1 && (ambient.has(v) || v.roadActive !== false && !['idle', 'charging'].includes(v.state));
   for (const [node, lock] of Object.entries(traffic.locks)) {
     const owner = byId.get(lock.id);
     if (!owner || (owner.roadDistance || 0) >= lock.clearAt - 1e-9 || (!onRoad(owner) && traffic.clock >= lock.parkUntil)) delete traffic.locks[node];
@@ -841,12 +839,16 @@ function roadTrafficStep(dt) {
         parkUntil: traffic.clock + 2,
       };
     }
+    if (!ambient.has(v) && p.limit > 1e-10) v.roadActive = true;
     const distanceBefore = v.roadDistance || 0, wasOnRoad = onRoad(v);
     if (ambient.has(v)) advanceAmbient(v, p.limit); else moveCar(v, dt, p.limit);
     const moved = (v.roadDistance || 0) - distanceBefore;
     v.speed = moved / dt;
     v.waitSince = p.desired > moved + 1e-8 ? v.waitSince ?? traffic.clock : null;
-    if (wasOnRoad && !onRoad(v)) traffic.ghosts.push({ id: v.id, parts: roadBody(v), until: traffic.clock + 2 });
+    if (wasOnRoad && !onRoad(v)) {
+      traffic.ghosts.push({ id: v.id, parts: roadBody(v), until: traffic.clock + 2 });
+      v.roadActive = false;
+    }
   }
 }
 function advanceRoadTraffic(dt) {
@@ -1151,7 +1153,7 @@ function advance(maxS, stopOnEvent, minS = 20, why = []) {
 /* ---------- live view snapshot (for the browser pages) ---------- */
 function liveSnap(evFrom) {
   const reqOut = (r) => ({ ...r, car: r.car ? r.car.id : null });
-  const carOut = (c) => ({ id: c.id, path: c.path, seg: c.seg, prog: c.prog, x: c.x, y: c.y, speed: c.speed, state: c.state, battery: c.battery, job: c.job ? c.job.id : null, next: c.next ? c.next.id : null, depot: c.depot ? c.depot.name : null, chargeTo: c.chargeTo, plugged: !!c.plugged, queueT: c.queueT, holdUntil: c.holdUntil, strandUntil: c.strandUntil, routeVer: c.routeVer, known: [...c.known] });
+  const carOut = (c) => ({ id: c.id, roadActive: c.roadActive, path: c.path, seg: c.seg, prog: c.prog, x: c.x, y: c.y, speed: c.speed, state: c.state, battery: c.battery, job: c.job ? c.job.id : null, next: c.next ? c.next.id : null, depot: c.depot ? c.depot.name : null, chargeTo: c.chargeTo, plugged: !!c.plugged, queueT: c.queueT, holdUntil: c.holdUntil, strandUntil: c.strandUntil, routeVer: c.routeVer, known: [...c.known] });
   return {
     t: S.t, seed: SEED, rph: Math.round(S.rph * DEMAND), agent: S.agent, agentSince: S.agentSince, connectT: S.connectT, hazIdx: S.hazIdx, rush: S.rush,
     traffic: { vehicles: S.traffic.vehicles.map(({ id, model, color, length, path, seg, prog, speed, x, y, ang, routeVer }) => ({ id, model, color, length, path: [...path], seg, prog, speed, x, y, ang, routeVer })) },

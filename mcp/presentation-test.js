@@ -53,7 +53,7 @@ for (const route of [[0], [0, 1]]) {
   const record = { heading: 170, headingAt: 0 };
   for (const key of ['grp', 'num', 'body', 'lamp', 'ring', 'face', 'route', 'under']) record[key] = svgNode();
   const context = vm.createContext({ S: { cars: [car], selected: null, hoverCar: null }, carEls: new Map([[car, record]]), nodes: [{ x: 100, y: 100 }], E: () => ({ oneway: false }), $: svgNode, UI: 1, LANE: 0.45, tagSize: 11, LAMP: {}, ROUTE_COL: {}, reduceMotion: false });
-  vm.runInContext(['carPos', 'displayHeading', 'renderMap'].map((name) => functionOf(pages[0], name)).join('\n'), context);
+  vm.runInContext(['carPos', 'parkedPose', 'displayHeading', 'renderMap'].map((name) => functionOf(pages[0], name)).join('\n'), context);
   const before = JSON.stringify(car);
   context.renderMap(100);
   assert.equal(record.body.attrs.transform, 'rotate(170.0) scale(0.95)', 'stopped and zero-progress cars retain their last display heading');

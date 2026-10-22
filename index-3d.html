@@ -498,7 +498,7 @@ main {
   </main>
 </div>
 
-<script src="map/toronto.js"></script>
+<script src="map/toronto.js?v=shoreline-2"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -604,7 +604,6 @@ edges.forEach((e) => {
   e.mx = m.x; e.my = m.y;
   e.rushy = e.motorway || DISTRICTS.some((d) => d.w >= 1.5 && Math.hypot(m.x - d.x, m.y - d.y) < 65);
 });
-// Public road load remains a planning estimate; physical vehicles also constrain each accepted movement.
 const DIST_PEAK = Math.max(...nodes.map((n) => DISTRICTS.reduce((s, d) => s + d.w * Math.exp(-((n.x - d.x) ** 2 + (n.y - d.y) ** 2) / (2 * 110 * 110)), 0)));
 edges.forEach((e) => {
   const g = DISTRICTS.reduce((s, d) => s + d.w * Math.exp(-((e.mx - d.x) ** 2 + (e.my - d.y) ** 2) / (2 * 110 * 110)), 0) / DIST_PEAK;
@@ -705,7 +704,7 @@ function initCars() {
     const n = usable[Math.floor(rC() * usable.length)];
     Object.assign(c, { path: [n], seg: 0, prog: 0, x: nodes[n].x, y: nodes[n].y, ang: 0, battery: c.i === low ? 12 + rC() * 10 : 30 + rC() * 65, state: 'idle', job: null, next: null, depot: null, chargeTo: 0, holdUntil: 0, holdEdge: null, lastLowLog: 0 });
     c.known.clear(); c.routeVer++;
-    c.roadTrail = []; c.roadDistance = 0; c.waitSince = null; c.speed = 0;
+    c.roadActive = false; c.roadTrail = []; c.roadDistance = 0; c.waitSince = null; c.speed = 0;
   }
   initTraffic(S, SEED);
 }
@@ -1198,7 +1197,6 @@ function expireIncidents() {
   }
 }
 
-/* ---------------- physical road traffic ---------------- */
 const ROAD_GAP = 0.2, NODE_CLEARANCE = 0.12, ROAD_STEP = 0.5;
 const TRAFFIC_MODELS = [
   { model: 'sedan', length: 0.48 }, { model: 'hatch', length: 0.44 },
@@ -1313,7 +1311,7 @@ function roadTrafficStep(dt) {
   traffic.clock += dt;
   const ambient = new Set(traffic.vehicles), actors = [...S.cars, ...traffic.vehicles];
   const byId = new Map(actors.map((v) => [v.id, v]));
-  const onRoad = (v) => v.seg < v.path.length - 1 && (ambient.has(v) || !['idle', 'charging'].includes(v.state));
+  const onRoad = (v) => v.seg < v.path.length - 1 && (ambient.has(v) || v.roadActive !== false && !['idle', 'charging'].includes(v.state));
   for (const [node, lock] of Object.entries(traffic.locks)) {
     const owner = byId.get(lock.id);
     if (!owner || (owner.roadDistance || 0) >= lock.clearAt - 1e-9 || (!onRoad(owner) && traffic.clock >= lock.parkUntil)) delete traffic.locks[node];
@@ -1376,12 +1374,16 @@ function roadTrafficStep(dt) {
         parkUntil: traffic.clock + 2,
       };
     }
+    if (!ambient.has(v) && p.limit > 1e-10) v.roadActive = true;
     const distanceBefore = v.roadDistance || 0, wasOnRoad = onRoad(v);
     if (ambient.has(v)) advanceAmbient(v, p.limit); else moveCar(v, dt, p.limit);
     const moved = (v.roadDistance || 0) - distanceBefore;
     v.speed = moved / dt;
     v.waitSince = p.desired > moved + 1e-8 ? v.waitSince ?? traffic.clock : null;
-    if (wasOnRoad && !onRoad(v)) traffic.ghosts.push({ id: v.id, parts: roadBody(v), until: traffic.clock + 2 });
+    if (wasOnRoad && !onRoad(v)) {
+      traffic.ghosts.push({ id: v.id, parts: roadBody(v), until: traffic.clock + 2 });
+      v.roadActive = false;
+    }
   }
 }
 function advanceRoadTraffic(dt) {
@@ -1463,7 +1465,7 @@ const LANE = 0.45;         // right-hand lane offset from the centreline, units
 const flatPts = (f) => { const o = []; for (let i = 0; i < f.length; i += 2) o.push([f[i], f[i + 1]]); return o; };
 function bldRing(b) { const pts = []; let x = 0, y = 0; for (let i = 2; i < b.length && typeof b[i] === 'number'; i += 2) { x += b[i]; y += b[i + 1]; pts.push([x / 10, y / 10]); } return pts; }
 const WATER_K = 0.12;      // waves were tuned for 10 m units; the world is in metres now
-let MK = 1;                // pins, labels and selection rings grow as the camera pulls back
+let MK = 1;
 let has3D = false;
 let renderer, scene, camera, controls, ground, raycaster, tagLayer;
 const carMeshes = new Map();
@@ -2245,6 +2247,13 @@ function writeRibbon(m, pts, drawn) {
   }
   m.ribbon.geometry.setDrawRange(0, n); m.ribbon.geometry.attributes.position.needsUpdate = true;
 }
+function parkedPose(c) {
+  if (c.roadActive !== false) return null;
+  const from = c.parkNode ?? c.path[c.seg], next = adj[from].find(({ e }) => !e.motorway) || adj[from][0];
+  if (!next) return null;
+  const p = edgeAt(next.e, from, 0), a = p.ang * Math.PI / 180, offset = ROAD_W(next.e) / 2 + 0.16;
+  return { x: p.x - Math.sin(a) * offset, y: p.y + Math.cos(a) * offset, ang: p.ang, edge: next.e };
+}
 function displayHeading(record, target, now, reduced) {
   const dt = now - record.headingAt;
   if (record.heading == null || reduced || dt > 500 || dt < 0) record.heading = target;
@@ -2266,12 +2275,12 @@ function renderMap(now) {
   MK = Math.max(1, Math.min(14, camera.position.distanceTo(controls.target) / 260)); AV.k = 0.35 * MK;
   for (const c of S.cars) {
     const m = carMeshes.get(c);
-    const p = carPos(c);
-    const target = c.livePos || (c.seg < c.path.length - 1 && c.prog > 0) ? p.ang : m.heading ?? p.ang;
+    const parked = parkedPose(c), p = parked || carPos(c);
+    const target = parked || c.livePos || (c.seg < c.path.length - 1 && c.prog > 0) ? p.ang : m.heading ?? p.ang;
     const heading = displayHeading(m, target, now, reduceMotion);
-    let ce = null;
+    let ce = parked?.edge || null;
     let ox = 0, oy = 0;
-    if (c.seg < c.path.length - 1) { ce = E(c.path[c.seg], c.path[c.seg + 1]); const a = target * Math.PI / 180, o = ce && ce.oneway ? 0 : LANE; ox = -Math.sin(a) * o; oy = Math.cos(a) * o; }
+    if (!parked && c.seg < c.path.length - 1) { ce = E(c.path[c.seg], c.path[c.seg + 1]); const a = target * Math.PI / 180, o = ce && ce.oneway ? 0 : LANE; ox = -Math.sin(a) * o; oy = Math.cos(a) * o; }
     const [x, z] = W3(p.x + ox, p.y + oy);
     m.g.position.set(x, ce && ce.elevated ? ELEV_Y : 0, z); m.g.rotation.y = -heading * Math.PI / 180; m.g.scale.setScalar(m.base);
     m.lamp.material = MAT['lamp-' + (LAMP[c.state] || 'paint-2')];

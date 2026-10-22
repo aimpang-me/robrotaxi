@@ -39,7 +39,7 @@ const json = (x) => JSON.parse(JSON.stringify(x));
 function assertBodies(f) {
   const lanes = new Map();
   for (const car of [...f.world.cars, ...f.world.traffic.vehicles]) {
-    if (car.path.length < 2 || ['idle', 'charging'].includes(car.state)) continue;
+    if (car.path.length < 2 || car.roadActive === false || ['idle', 'charging'].includes(car.state)) continue;
     for (const p of f.body(car)) {
       const key = p.a + '-' + p.b;
       for (const o of lanes.get(key) || []) if (o.id !== car.id) {
@@ -62,6 +62,20 @@ test('a stopped lead physically slows a taxi without charging for blocked distan
   assert(Math.abs(before - follower.battery - follower.roadDistance * .01) < 1e-8);
   assert.equal(follower.speed, 0);
 });
+test('a parked taxi waits for a safe gap before entering moving traffic', () => {
+  const f = fixture(), lead = f.add('V-0001', [0, 1], .1);
+  f.world.cars.splice(f.world.cars.indexOf(lead), 1);
+  Object.assign(lead, { model: 'sedan', length: .48, turn: 1, index: 0 });
+  f.world.traffic.vehicles.push(lead);
+  const taxi = f.add('T-01', [0], 0, { state: 'idle', roadActive: false });
+  f.setRoute(taxi, { path: [0, 1], seg: 0, prog: 0 }); taxi.state = 'reposition';
+  f.move(); assertBodies(f);
+  assert.equal(taxi.prog, 0); assert.equal(taxi.roadActive, false);
+  assert(lead.prog > .1, 'the existing traffic can clear the entry');
+  for (let i = 0; i < 20; i++) { f.move(); assertBodies(f); }
+  assert(taxi.roadDistance > 2, 'the taxi joins after clearance');
+});
+
 test('opposing lanes pass independently', () => {
   const f = fixture(), a = f.add('T-01', [0, 1], 3), b = f.add('T-02', [1, 0], 3);
   for (let i = 0; i < 6; i++) { f.move(); assertBodies(f); }
