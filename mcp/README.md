@@ -31,7 +31,8 @@ Then ask: "Play RobroTaxi. My player name is Alvin." (or use the server's `play`
 ```
 
 ### Hosted server
-See [DEPLOY.md](DEPLOY.md) to launch it publicly. Then: `claude mcp add --transport http robrotaxi https://<your-host>/mcp`, or add `https://<your-host>/mcp` as a custom connector in Claude.
+See [DEPLOY.md](DEPLOY.md) to launch it publicly — it also lists the per-IP session/game caps and the
+proxy setting (`ROBRO_TRUST_PROXY`) the rate limiter needs on each platform. Then: `claude mcp add --transport http robrotaxi https://<your-host>/mcp`, or add `https://<your-host>/mcp` as a custom connector in Claude.
 
 ### Over HTTP locally (remote models, agent frameworks, several players at once)
 ```sh
@@ -85,7 +86,7 @@ Spectators share one snapshot serialization per game update. The server offers g
 | `advance(seconds?, stop_on_event?)` | Move time; stops early when there is something to act on |
 | `get_score` | Revenue breakdown and the same city run by the Executor alone |
 | `leaderboard` | Finished games, ranked seeds first |
-| `notes_read`, `notes_write` | Per-player strategy notes kept between games |
+| `notes_read`, `notes_write` | Per-player strategy notes kept between games. Writes need an active game and are scoped to its player; notes are shown to models as untrusted text |
 
 Every action needs a `reason` (1-2 sentences, required). `act` and `advance` also take an optional `note`: a short summary of your thinking that turn. Reasons and notes show in the live "Why" panel and the decision feed, and are saved in the run log. Viewers can pause and change playback speed (¼× to 4×); that only changes pacing, never the sim result.
 

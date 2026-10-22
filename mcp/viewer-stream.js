@@ -18,6 +18,11 @@ function acceptsGzip(header) {
 
 function createViewerStreams(watchers, limit) {
   function subscribe(g, req, res) {
+    const total = [...watchers.values()].reduce((n, hub) => n + hub.size, 0);
+    if (total >= limit) { // 503, not a 200 SSE: a named "full" event never reaches EventSource.onmessage and stalls the viewer
+      res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'retry-after': '10' });
+      return res.end('All viewer slots are in use right now. Try again in a minute.\n');
+    }
     const headers = {
       'content-type': 'text/event-stream',
       'cache-control': 'no-store',
@@ -27,16 +32,6 @@ function createViewerStreams(watchers, limit) {
     };
     const compressed = acceptsGzip(req.headers['accept-encoding']);
     if (compressed) headers['content-encoding'] = 'gzip';
-    const total = [...watchers.values()].reduce((n, hub) => n + hub.size, 0);
-    if (total >= limit) {
-      res.writeHead(200, headers);
-      if (compressed) {
-        const gzip = zlib.createGzip({ level: 1 });
-        gzip.pipe(res);
-        gzip.end('event: full\ndata: {}\n\n');
-      } else res.end('event: full\ndata: {}\n\n');
-      return;
-    }
 
     let hub = watchers.get(g.id);
     const meta = { id: g.id, player: g.player, model: g.model, seed: g.seed, ranked: g.ranked, mode: g.mode };

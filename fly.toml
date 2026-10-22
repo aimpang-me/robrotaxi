@@ -16,6 +16,10 @@ primary_region = "iad"
     path = "/healthz"
     timeout = "3s"
 
+[env]
+  # Fly sets Fly-Client-IP, so the rate limiter can key real clients without trusting X-Forwarded-For.
+  ROBRO_TRUST_PROXY = "fly"
+
 [[mounts]]
   source = "robrotaxi_data"
   destination = "/data"

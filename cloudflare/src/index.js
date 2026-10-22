@@ -36,7 +36,7 @@ export class RobroHQ extends Container {
   defaultPort = 8787;
   sleepAfter = '45m';          // games live in memory; idle games are closed after 30 min anyway
   enableInternet = false;      // the server needs nothing outside Cloudflare
-  envVars = { ROBRO_STORE_URL: 'http://robro-store', ROBRO_TRUST_PROXY: '1' };
+  envVars = { ROBRO_STORE_URL: 'http://robro-store', ROBRO_TRUST_PROXY: 'cloudflare' };
 }
 // assigned after the class (not as a static field) so the package's setter registers the handler
 RobroHQ.outboundByHost = { 'robro-store': (req, env) => store(req, env) };

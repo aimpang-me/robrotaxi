@@ -112,12 +112,14 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
   // playback controls: the server only changes how long it waits between sim steps, so results are identical at any speed
   let ctl = { speed: 1, paused: false };
   const ctlEl = $h('.ctl');
-  const setCtl = (q) => fetch(`/live/${encodeURIComponent(id)}/ctl?${q}`).then((r) => r.json()).then((c) => { ctl = c; drawCtl(); }).catch(() => {});
+  const setCtl = (patch) => fetch(`/live/${encodeURIComponent(id)}/ctl`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error('ctl ' + r.status))))
+    .then((c) => { ctl = c; drawCtl(); }).catch(() => {});
   function drawCtl() {
     ctlEl.replaceChildren();
     const mk = (label, pressed, fn, title) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.title = title; b.setAttribute('aria-pressed', String(pressed)); b.addEventListener('click', fn); ctlEl.append(b); };
-    mk(ctl.paused ? '▶' : '❚❚', ctl.paused, () => setCtl('paused=' + (ctl.paused ? 0 : 1)), 'Pause or resume the view. The model waits; the game clock is unaffected.');
-    for (const [v, l] of [[0.25, '¼×'], [0.5, '½×'], [1, '1×'], [2, '2×'], [4, '4×']]) mk(l, ctl.speed === v, () => setCtl('speed=' + v), 'Playback speed');
+    mk(ctl.paused ? '▶' : '❚❚', ctl.paused, () => setCtl({ paused: !ctl.paused }), 'Pause or resume the view. The model waits; the game clock is unaffected.');
+    for (const [v, l] of [[0.25, '¼×'], [0.5, '½×'], [1, '1×'], [2, '2×'], [4, '4×']]) mk(l, ctl.speed === v, () => setCtl({ speed: v }), 'Playback speed');
   }
   drawCtl();
   const LOCK = 'Locked in a live model game: this would change the day the model is playing, so scores would stop being comparable. Playback speed and pause in the Fleet rail are free.';
@@ -344,7 +346,22 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
     $h('.live').textContent = sc.finished ? 'FINISHED' : sc.outOfTime ? 'ENDED' : 'LIVE';
   }
 
+  let streamErrors = 0;
   const es = new EventSource(`/live/${encodeURIComponent(id)}/stream`);
-  es.onmessage = (ev) => { try { const packet = JSON.parse(ev.data), c = packet.ctl; lastMsg = performance.now(); if (c && (c.speed !== ctl.speed || c.paused !== ctl.paused)) { ctl = c; drawCtl(); } playback.push(packet, ev.data.length * 2); } catch (err) { console.error('live update failed', err); } };
-  es.onerror = () => { $h('.live').textContent = 'OFFLINE'; };
+  es.onmessage = (ev) => {
+    streamErrors = 0;
+    try { const packet = JSON.parse(ev.data), c = packet.ctl; lastMsg = performance.now(); if (c && (c.speed !== ctl.speed || c.paused !== ctl.paused)) { ctl = c; drawCtl(); } playback.push(packet, ev.data.length * 2); } catch (err) { console.error('live update failed', err); }
+  };
+  es.onerror = () => {
+    streamErrors++;
+    $h('.live').textContent = 'OFFLINE';
+    // A 404/503 stream (stale link, game over, or the watcher cap) closes EventSource for good; a
+    // transient network error retries. Either way, stop retrying forever and say why.
+    const closed = es.readyState === EventSource.CLOSED;
+    if (closed || streamErrors > 4) {
+      es.close();
+      $h('.live').textContent = 'ENDED';
+      if ($h('.who')) $h('.who').textContent = 'HQ is full or this game is no longer live — open the watch link again.';
+    }
+  };
 })();
