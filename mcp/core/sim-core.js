@@ -330,7 +330,9 @@ function moveCar(car, dt, allowance = Infinity) {
     if (distance <= 1e-10) break;
     recordRoadTravel(car, a, b, car.prog, distance);
     car.prog += distance; allowance -= distance; rem -= distance / v;
-    consume(car, distance, e); if (car.state === 'stranded') return;
+    consume(car, distance, e);
+    if (distance === batteryDistance && car.state !== 'stranded') strand(car);
+    if (car.state === 'stranded') return;
     if (car.prog >= e.len - 1e-10) { car.prog = 0; car.seg++; }
   }
   if (car.seg >= car.path.length - 1) { car.path = [car.path[car.path.length - 1]]; car.seg = 0; car.prog = 0; arrive(car); }

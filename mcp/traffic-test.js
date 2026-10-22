@@ -130,6 +130,15 @@ test('physical distance and stranding agree at battery exhaustion', () => {
   assert(Math.abs(car.prog - 2.1) < 1e-8);
   assert(Math.abs(car.roadDistance - .1) < 1e-8);
 });
+test('fractional traffic consumption cannot leave an exhausted taxi stuck on a positive rounding residue', () => {
+  const f = fixture(), battery = .000082715989;
+  f.edges[0].traffic = 1.347;
+  const car = f.add('T-01', [0, 1], 2, { battery });
+  f.move();
+  assert.equal(car.state, 'stranded'); assert.equal(car.battery, 0);
+  assert(Math.abs(car.roadDistance - battery / (.01 * (1 + .25 * .347))) < 1e-12);
+});
+
 test('ambient initialization is legal, deterministic, isolated from demand and hazards', () => {
   const f = fixture(true);
   assert.deepEqual(json(f.streams()), json(f.streamsOnly()));
