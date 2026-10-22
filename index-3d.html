@@ -1299,8 +1299,9 @@ function drawServiceEdge() {
   const band = new THREE.Shape(path(SERVICE).getPoints()); band.holes.push(path(serviceBoundary(MAPG.play, 13.3)));
   for (const [shape, color, y] of [[outer, COL.asphalt, 0.4], [band, COL['paint-2'], 0.45]]) {
     const geo = new THREE.ShapeGeometry(shape); geo.rotateX(-Math.PI / 2);
-    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: lin(color), fog: false, side: THREE.DoubleSide }));
-    mesh.position.y = y; scene.add(mesh);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: lin(color), fog: false, side: THREE.DoubleSide, depthTest: false, depthWrite: false, transparent: shape === band }));
+    mesh.name = shape === outer ? 'service-matte' : 'service-edge';
+    mesh.position.y = y; mesh.renderOrder = shape === outer ? 4 : 5; scene.add(mesh);
   }
 }
 function makeLabelTexture(text, fg, bg) {
