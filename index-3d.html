@@ -1658,15 +1658,15 @@ function waterMaterial() {
       #include <fog_pars_fragment>
       vec2 wave(vec2 p, vec2 d, float f, float s, float a) { return d * cos(dot(p, d) * f + uTime * s) * a; }
       void main() {
-        vec2 p = vW.xz * WATER_K, g = wave(p, vec2(0.8, 0.6), 0.09, 0.9, 0.5) + wave(p, vec2(-0.45, 0.89), 0.17, 1.4, 0.35) + wave(p, vec2(0.96, -0.28), 0.29, 2.0, 0.22);
+        vec2 p = vW.xz * WATER_K, g = wave(p, vec2(0.8, 0.6), 0.9, 0.35, 0.16) + wave(p, vec2(-0.45, 0.89), 1.7, 0.55, 0.10) + wave(p, vec2(0.96, -0.28), 3.1, 0.75, 0.055);
         #ifdef DETAIL
-        g += wave(p, vec2(0.3, 0.95), 0.61, 2.9, 0.14) + wave(p, vec2(-0.9, -0.43), 0.97, 3.7, 0.09);
+        g += wave(p, vec2(0.3, 0.95), 6.0, 1.1, 0.025) + wave(p, vec2(-0.9, -0.43), 10.0, 1.5, 0.015);
         #endif
-        vec3 n = normalize(vec3(-g.x * 0.20, 1.0, -g.y * 0.20)), v = normalize(cameraPosition - vW);
+        vec3 n = normalize(vec3(-g.x * 0.13, 1.0, -g.y * 0.13)), v = normalize(cameraPosition - vW);
         float fres = pow(1.0 - max(dot(n, v), 0.0), 4.0);
-        vec3 col = mix(deep, shallow, clamp(0.5 + g.x * 0.25, 0.0, 1.0));
-        col = mix(col, sky, 0.12 + 0.4 * fres);
-        col += sun * pow(max(dot(n, normalize(sunDir + v)), 0.0), 160.0) * 0.45;
+        vec3 col = mix(deep, shallow, clamp(0.48 + g.x * 0.18, 0.0, 1.0));
+        col = mix(col, sky, 0.08 + 0.18 * fres);
+        col += sun * pow(max(dot(n, normalize(sunDir + v)), 0.0), 256.0) * 0.08;
         gl_FragColor = linearToOutputTexel(vec4(col, 1.0));
         #include <fog_fragment>
       }`,
@@ -1800,7 +1800,7 @@ function buildCityArt(L) {
     stone.box(cx, cz, len, br.w, 0, 0.3, ang, deck);
     for (const o of [-1, 1]) { const ox = -Math.sin(ang) * o * (br.w / 2 + 0.7), oz = Math.cos(ang) * o * (br.w / 2 + 0.7); stone.box(cx + ox, cz + oz, len, 1.4, 0, 3, ang, rail); }
   }
-  if (L.land?.length) { const mat = new THREE.MeshStandardMaterial({ color: COL.block, roughness: 0.95 }); for (const l of L.land) flat(l.pts, 0.14, mat); }
+  if (L.land?.length) { const mat = new THREE.MeshStandardMaterial({ color: COL.block, roughness: 0.95 }); for (const l of L.land) flat(l.pts, 0.14, mat).name = 'dry-land'; }
   const trees = (L.trees || []).slice();
   if (L.parks?.length) {
     const mat = new THREE.MeshStandardMaterial({ map: grassTexture(), roughness: 1 }); mat.map.repeat.set(1 / 40, 1 / 40);
@@ -2104,14 +2104,14 @@ function init3D() {
   scene.add(sun);
 
   // the lake under everything, the shore and islands on it, the streets on top
-  { const lake = new THREE.Mesh(new THREE.PlaneGeometry(60000, 60000), waterMaterial()); lake.rotation.x = -Math.PI / 2; lake.position.y = -0.2; scene.add(lake); }
+  { const lake = new THREE.Mesh(new THREE.PlaneGeometry(60000, 60000), waterMaterial()); lake.name = 'base-lake'; lake.rotation.x = -Math.PI / 2; lake.position.y = -0.2; scene.add(lake); }
   const [gx, gz] = W3((PLAYB.x0 + PLAYB.x1) / 2, (PLAYB.y0 + PLAYB.y1) / 2);
   ground = new THREE.Mesh(new THREE.PlaneGeometry((PLAYB.x1 - PLAYB.x0) * M3, (PLAYB.y1 - PLAYB.y0) * M3), new THREE.MeshStandardMaterial({ map: groundTexture(), transparent: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1 }));
   ground.rotation.x = -Math.PI / 2; ground.position.set(gx, 0.3, gz); ground.receiveShadow = true; ground.renderOrder = 1; scene.add(ground);
 
   // buildings, water, parks, trees and sky
   const LAY = torontoLayout(); buildCityArt(LAY);
-  { const mat = waterMaterial(); for (const w of LAY.rivers) { const geo = new THREE.ShapeGeometry(new THREE.Shape(w.pts.map(([x, z]) => new THREE.Vector2(x, -z)))); geo.rotateX(-Math.PI / 2); const m = new THREE.Mesh(geo, mat); m.position.y = 0.18; scene.add(m); } }
+  { const mat = waterMaterial(); for (const w of LAY.rivers) { const geo = new THREE.ShapeGeometry(new THREE.Shape(w.pts.map(([x, z]) => new THREE.Vector2(x, -z)))); geo.rotateX(-Math.PI / 2); const m = new THREE.Mesh(geo, mat); m.name = 'inland-water'; m.position.y = 0.18; scene.add(m); } }
   drawServiceEdge();
   elevatedDecks();
   streetDetails();
