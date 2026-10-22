@@ -243,6 +243,7 @@ function patchPage(file) {
   rep('window.__robro = {', 'window.__robroLiveHooks = { main: () => MAIN, shadow: () => SHADOW, setShadow: (w) => { SHADOW = w; }, setSeed: (n) => { SEED = n; }, cloneWorld, nodes, edges, E, edgeAt, BASE, DEPOTS, recomputeTraffic, log, setAgentUI,\n  // the 3D scene graph, for modules that add to it (null on the 2D page)\n  get scene() { return typeof scene === "undefined" ? null : scene; }, get W3() { return typeof W3 === "undefined" ? null : W3; } };\nwindow.__robro = {');
   // live.js eases each car between server updates and rounds corners; it hands the page a finished pose
   rep('function carPos(c) {', 'function carPos(c) {\n  if (c.livePos) return c.livePos;');
+  rep('<script src="mcp/viewer/city-audio.js"></script>', '<script src="/city-audio.js"></script>');
   return html.replace('<script src="mcp/viewer/traffic.js"></script>', '<script src="/live.js"></script><script src="/traffic.js"></script>');
 }
 const page = (res, code, type, body) => { res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store' }); res.end(body); };
@@ -270,7 +271,14 @@ function handleView(req, res, url) {
   const p = url.pathname;
   // the city data the demo pages load as map/toronto.js (relative to /view/2d and /view/3d)
   if (p === '/view/map/toronto.js' || p === '/map/toronto.js') return page(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(PAGES, 'map', 'toronto.js')));
-  if (p === '/live.js' || p === '/traffic.js') return page(res, 200, 'text/javascript', fs.readFileSync(path.join(__dirname, 'viewer', p.slice(1))));
+  if (p === '/live.js' || p === '/traffic.js' || p === '/city-audio.js') return page(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(__dirname, 'viewer', p.slice(1))));
+  if (p.startsWith('/audio/')) {
+    const manifest = require('./viewer/audio/manifest.json'), name = p.slice('/audio/'.length);
+    const allowed = new Set(['manifest.json', ...Object.values(manifest.clips).map(c => c.file)]);
+    if (!allowed.has(name)) return page(res, 404, 'text/plain', 'not found');
+    try { return page(res, 200, name === 'manifest.json' ? 'application/json' : 'audio/mpeg', fs.readFileSync(path.join(__dirname, 'viewer', 'audio', name))); }
+    catch { return page(res, 404, 'text/plain', 'not found'); }
+  }
   if (p === '/view/2d' || p === '/view/3d') {
     try { return page(res, 200, 'text/html; charset=utf-8', patchPage(p === '/view/2d' ? 'index.html' : 'index-3d.html')); } catch (e) { return page(res, 500, 'text/plain', e.message); }
   }

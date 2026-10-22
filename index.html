@@ -2097,10 +2097,19 @@ resetWorld(SEED);
 { const ms = $('mapscroll'); ms.scrollLeft = (ms.scrollWidth - ms.clientWidth) / 2; }
 window.__robro = { main: () => MAIN, shadow: () => SHADOW, run(n) { for (let i = 0; i < n; i++) { step(2); if (SHADOW) { S = SHADOW; step(2); S = MAIN; } } } };
 window.__robroTrafficHooks = { main: () => MAIN, E, edgeAt };
+window.__robroAudioHooks = { readFrame() {
+  const playback = window.__robroPlayback;
+  return { simTime: MAIN.t, paused: playback ? playback.paused : MAIN.paused, revision: SEED + ':' + (playback?.revision || 0),
+    focus: { x: (VB.x + VB.w / 2) * 10, y: (VB.y + VB.h / 2) * 10 }, right: { x: 1, y: 0 }, viewDistance: VB.w * 10,
+    vehicles: MAIN.cars.concat(MAIN.traffic?.vehicles || []).map(c => {
+      const p = carPos(c); return { id: c.id, kind: c.model === 'bus' ? 'bus' : c.model ? 'car' : 'ev', x: p.x * 10, y: p.y * 10, roadActive: c.roadActive };
+    }) };
+} };
 requestAnimationFrame(frame);
 })();
 </script>
 <script src="mcp/viewer/traffic.js"></script>
+<script src="mcp/viewer/city-audio.js"></script>
 
 </body>
 </html>

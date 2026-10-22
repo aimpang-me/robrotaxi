@@ -1,0 +1,90 @@
+{
+  "status": "ready",
+  "provider": "ElevenLabs Sound Effects v3",
+  "generated": "2026-10-22",
+  "account_plan": "Free",
+  "usage": "Noncommercial with attribution. See README.md.",
+  "processing": "120 ms wrap crossfade on loops; one-shot edge fades; normalized to -18 LUFS / -2 dBTP; stereo MP3 44.1 kHz 160 kbps.",
+  "clips": {
+    "city": {
+      "file": "city-ambience.mp3",
+      "loop": true,
+      "duration_seconds": 29.88,
+      "history_id": "DZKBqPf7KWRyIgYooJWU",
+      "variant": 1,
+      "prompt": "Seamless quiet downtown Toronto daytime ambience from a sidewalk: a soft wash of distant road traffic, light air moving between buildings, very distant indistinct pedestrian murmur. Natural field recording, even texture, no dominant vehicle, no sirens, no close horns, no speech words, no music. Calm background for a city simulation.",
+      "raw_sha256": "f7e9be9ad220d14a3505788c9d8782a7d90b1d00a31fb05b423f85855f49bdd2",
+      "sha256": "89d2fecb7867209ad220c553d099913ed4edf7a81b19165c0847a64b257144ab"
+    },
+    "ev": {
+      "file": "electric-drive.mp3",
+      "loop": true,
+      "duration_seconds": 7.88,
+      "history_id": "ADR2PnbLrz2Xf9CCdjCv",
+      "variant": 1,
+      "prompt": "Seamless isolated electric passenger car driving at a steady moderate speed on dry asphalt. Soft tire hiss and a gentle smooth electric motor whine. Consistent cruising texture, no pass-by fade, no acceleration sweep, no voices, no horns, no music. Close clean vehicle foley for a quiet robotaxi.",
+      "raw_sha256": "9f742a1e4cf36828ca8ad58966d0de927b07a0f79f88fb1fc260196b0cd482fd",
+      "sha256": "27b37f081d5778e4358cb5fd5a21bb8485b1c433048f39d34bbda8875cf3763f"
+    },
+    "car": {
+      "file": "car-drive.mp3",
+      "loop": true,
+      "duration_seconds": 7.88,
+      "history_id": "BimUSSp2OvUmScHgLthj",
+      "variant": 1,
+      "prompt": "Seamless isolated compact petrol passenger car cruising steadily on dry urban asphalt. Restrained low engine hum and soft tire roll. Constant speed and distance, natural mechanical texture, no pass-by fade, no revving, no horns, no voices, no music. Clean game vehicle foley.",
+      "raw_sha256": "6f797378ff8e80e21ad5d7733adc23c81e44faaaa01f1c4703bd21587c5a4a92",
+      "sha256": "f54669560d3e54da819207ead2578d2e99c6202d8bb168d9dbce3f8ff0f2d4f1"
+    },
+    "bus": {
+      "file": "bus-drive.mp3",
+      "loop": true,
+      "duration_seconds": 9.88,
+      "history_id": "JyI6aZdzFWZKuwLXH1UV",
+      "variant": 1,
+      "prompt": "Seamless isolated city transit bus rolling slowly along a dry city street. Deep restrained diesel engine rumble, tire roll and a little chassis vibration. Steady continuous texture, no pass-by fade, no air-brake blast, no voices, no horns, no music. Clean game sound, gentle rather than dramatic.",
+      "raw_sha256": "b4bea174f742c2ba60b961b21a48a091a284a45c861b8bef0d255f43be30b08e",
+      "sha256": "48214ca426707a13b9f6d50cf9a86414b23af5865254ea1535ce9470ac501a46"
+    },
+    "people": {
+      "file": "street-people.mp3",
+      "loop": true,
+      "duration_seconds": 11.88,
+      "history_id": "86q926E0zgMZExCHpEwB",
+      "variant": 1,
+      "prompt": "Seamless soft city sidewalk ambience: a few pedestrians walking past at a distance, scattered footsteps and quiet indistinct conversation without intelligible words. Natural outdoor field recording, calm daytime, no music, no dominant traffic or horns. Consistent background texture.",
+      "raw_sha256": "39ba7d8f984c073ffbd62dbaef7f0320cf95e9aeb2f46dbd443b8ff17abf449d",
+      "sha256": "0d3c732c7ad9cabc994ed03c84a98cf8e52e587e057d99d8c951838d552d315c"
+    },
+    "birds": {
+      "file": "city-birds.mp3",
+      "loop": false,
+      "duration_seconds": 5,
+      "history_id": "1n4mritiRcg3cqAlaOwD",
+      "variant": 1,
+      "prompt": "A few gentle sparrow chirps from a small tree beside a city sidewalk. Natural outdoor recording, light and distant, short quiet group of calls with space between them. No music, no voices, no dramatic bird flock.",
+      "raw_sha256": "84cec9ea264d30ff43763ce685b4a0bd306961b5a825fced2829510731940495",
+      "sha256": "ff8f0a553d5f8fb3e9205fc70c96783a4018aa1db866f5ed3ff0cc8b2a468454"
+    },
+    "tram": {
+      "file": "streetcar.mp3",
+      "loop": false,
+      "duration_seconds": 6,
+      "history_id": "J507PtDBJG5fcXwq4UVF",
+      "variant": 1,
+      "prompt": "One distant Toronto-style electric streetcar rolling smoothly along rails a block away. Quiet metallic wheel rumble and a soft motor hum, naturally approaching then fading. No bell, no horn, no voices, no music. Restrained ambient city detail.",
+      "raw_sha256": "2a5ff928c20dc4cbc3761e5b1acd1942a148b8923c637bebbcd3c2688d068485",
+      "sha256": "6ca5ba9d8117ea137752464007c775396e5d13d993ae0f902d2b42b0a37b5865"
+    },
+    "horn": {
+      "file": "distant-horn.mp3",
+      "loop": false,
+      "duration_seconds": 2,
+      "history_id": "Gp33mWKXEDFOg9TEvURr",
+      "variant": 1,
+      "prompt": "One short soft passenger-car horn heard from two city blocks away, with a natural open-air decay. A distant everyday city ambience detail, not an alarm. No repeated honking, no siren, no collision, no music, no voices.",
+      "raw_sha256": "b80570dcbb274dde51d354a3dca1d5bc72c247d22a3f03f437b6458b022f28f6",
+      "sha256": "d7ef342b4f22ef8ff76b7fb4187f0dc357eba55f0bfa89a3d224e8a821c32b48"
+    }
+  }
+}

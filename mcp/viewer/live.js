@@ -55,6 +55,7 @@ if (typeof window !== 'undefined') (() => {
   if (!id || !H) return;
   window.__robroLive = true;
   const playback = new Playback();
+  const playbackStatus = window.__robroPlayback = { paused: false, revision: 0 };
 
   const css = document.createElement('style');
   css.textContent = `
@@ -264,6 +265,8 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
   function animate(now) {
     const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
     const frame = playback.step(now, { ...ctl, hidden: document.hidden });
+    playbackStatus.paused = ctl.paused;
+    if (frame.resynced) playbackStatus.revision++;
     for (const packet of frame.due) apply(packet.meta, packet.snap);
     if (frame.base) {
       const S = H.main();
