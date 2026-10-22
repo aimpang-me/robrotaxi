@@ -42,11 +42,18 @@ function createViewerStreams(watchers, limit) {
     const meta = { id: g.id, player: g.player, model: g.model, seed: g.seed, ranked: g.ranked, mode: g.mode };
     if (!hub) {
       const clients = new Set();
+      let scheduled = false;
       const broadcast = () => {
-        const snap = g.live(hub.cursor);
-        hub.cursor = snap.evTo;
-        const packet = `data: ${JSON.stringify({ meta, snap, ctl: g.ctl })}\n\n`;
-        for (const client of clients) client.send(packet);
+        if (scheduled) return;
+        scheduled = true;
+        queueMicrotask(() => {
+          scheduled = false;
+          if (!clients.size) return;
+          const snap = g.live(hub.cursor);
+          hub.cursor = snap.evTo;
+          const packet = `data: ${JSON.stringify({ meta, snap, ctl: g.ctl })}\n\n`;
+          for (const client of clients) client.send(packet);
+        });
       };
       const heartbeat = setInterval(() => {
         for (const client of clients) client.send(': ka\n\n');
@@ -58,10 +65,11 @@ function createViewerStreams(watchers, limit) {
 
     res.writeHead(200, headers);
     const gzip = compressed ? zlib.createGzip({ level: 1 }) : null;
-    let closed = false, busy = false, compressorBlocked = false, responseBlocked = false;
+    let closed = false, compressorBlocked = false, responseBlocked = false, pending = null;
     const close = () => {
       if (closed) return;
       closed = true;
+      pending = null;
       hub.clients.delete(client);
       if (gzip) gzip.destroy();
       if (!res.destroyed) res.destroy();
@@ -74,27 +82,34 @@ function createViewerStreams(watchers, limit) {
     const client = {
       send(packet) {
         if (closed) return;
-        if (busy || compressorBlocked || responseBlocked) return close();
+        if (compressorBlocked || responseBlocked) {
+          if (pending !== null) return close();
+          pending = packet;
+          return;
+        }
         try {
           if (!gzip) {
             responseBlocked = !res.write(packet);
             return;
           }
-          busy = true;
           compressorBlocked = !gzip.write(packet);
-          gzip.flush(zlib.constants.Z_SYNC_FLUSH, () => { busy = false; });
+          gzip.flush(zlib.constants.Z_SYNC_FLUSH);
         } catch { close(); }
       },
+    };
+    const flushPending = () => {
+      if (pending === null || compressorBlocked || responseBlocked) return;
+      const packet = pending; pending = null; client.send(packet);
     };
     if (gzip) {
       gzip.on('data', (chunk) => {
         if (closed) return;
         try { if (!res.write(chunk)) responseBlocked = true; } catch { close(); }
       });
-      gzip.on('drain', () => { compressorBlocked = false; });
+      gzip.on('drain', () => { compressorBlocked = false; flushPending(); });
       gzip.on('error', close);
     }
-    res.on('drain', () => { responseBlocked = false; });
+    res.on('drain', () => { responseBlocked = false; flushPending(); });
     res.on('close', close);
     res.on('error', close);
     hub.clients.add(client);

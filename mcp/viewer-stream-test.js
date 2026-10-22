@@ -115,16 +115,37 @@ async function main() {
     assert.equal(watchers.get(g.id).size, 1);
     blockedResponse.cork();
     g.emit();
+    await Promise.resolve();
     g.emit();
-    await waitFor(() => blocked.closed && !watchers.has(g.id), 'blocked socket was not disconnected on next packet');
+    await Promise.resolve();
+    g.emit();
+    await waitFor(() => blocked.closed && !watchers.has(g.id), 'blocked socket was not disconnected after its one pending packet filled');
     const reconnect = await open({ 'accept-encoding': 'gzip' });
     assert(reconnect.frames[0].snap.events.some((event) => event.kind === 'note'), 'reconnect starts with full snapshot');
     reconnect.close();
     await waitFor(() => !watchers.has(g.id), 'reconnect cleanup failed');
 
-    const busyCompressor = await open({ 'accept-encoding': 'gzip' });
-    g.emit(); g.emit();
-    await waitFor(() => busyCompressor.closed && !watchers.has(g.id), 'compressor backlog was not disconnected on next packet');
+    const batch = await open({ 'accept-encoding': 'gzip' }), beforeBatch = clones;
+    g.note('First action in one turn.');
+    g.note('Second action in one turn.');
+    g.note('Third action in one turn.');
+    await waitFor(() => batch.closed || batch.frames.length === 2, 'same-turn action batch did not arrive');
+    assert.equal(batch.closed, false, 'a healthy gzip viewer must survive a normal synchronous action batch');
+    assert.equal(clones - beforeBatch, 1, 'same-turn actions share one final snapshot');
+    assert.deepEqual(batch.frames[1].snap.events.map(event => event.head), ['First action in one turn.', 'Second action in one turn.', 'Third action in one turn.']);
+    g.note('Before an overlapping control update.');
+    await Promise.resolve();
+    g.ctl.paused = false; g.emit();
+    await waitFor(() => batch.closed || batch.frames.length === 4, 'overlapping gzip packets did not arrive');
+    assert.equal(batch.closed, false, 'one short compressor overlap is buffered rather than disconnecting a healthy viewer');
+    assert.equal(batch.frames[2].snap.events[0].head, 'Before an overlapping control update.');
+    assert.equal(batch.frames[3].ctl.paused, false);
+    assert.deepEqual(batch.frames[3].snap.events, [], 'buffered control cannot duplicate the preceding event');
+    batch.close(); await waitFor(() => !watchers.has(g.id), 'batch viewer cleanup failed');
+
+    const backedUp = await open({ 'accept-encoding': 'gzip' });
+    g.emit(); await Promise.resolve(); g.emit(); await Promise.resolve(); g.emit();
+    await waitFor(() => backedUp.closed && !watchers.has(g.id), 'compressor backlog remains bounded to one pending packet');
 
     const crowd = [];
     for (let i = 0; i < 300; i++) crowd.push(await open({ 'accept-encoding': 'gzip' }));
