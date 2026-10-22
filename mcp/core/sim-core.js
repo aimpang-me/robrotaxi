@@ -116,8 +116,11 @@ const MIN_TRIP = 120;      // riders don't hail for less than about 1.2 km as th
 /* ---------------- routing ---------------- */
 // the agent plans on what the fleet has seen (kBlocked/kTraffic); cars drive on the real road (blocked/traffic)
 const timeW = (e) => e.kBlocked ? Infinity : e.len / (BASE * e.spd / e.kTraffic);
+const timeRoutes = new Map();
 // binary-heap Dijkstra; `rev` walks edges backwards (shortest paths INTO the source)
 function heapSearch(from, to, w, rev) {
+  const key = from + "," + to + "," + !!rev;
+  if (w === timeW && timeRoutes.has(key)) return timeRoutes.get(key);
   const N = nodes.length, dist = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), done = new Uint8Array(N);
   const hk = [], hv = [];
   const push = (k, v) => { let i = hk.length; hk.push(k); hv.push(v); while (i > 0) { const p = (i - 1) >> 1; if (hk[p] <= k) break; hk[i] = hk[p]; hv[i] = hv[p]; i = p; } hk[i] = k; hv[i] = v; };
@@ -132,7 +135,12 @@ function heapSearch(from, to, w, rev) {
       const nd = dist[u] + c; if (nd < dist[v]) { dist[v] = nd; prev[v] = u; push(nd, v); }
     }
   }
-  return { dist, prev };
+  const result = { dist, prev };
+  if (w === timeW) {
+    if (timeRoutes.size >= 512) timeRoutes.clear();
+    timeRoutes.set(key, result);
+  }
+  return result;
 }
 function dijkstra(from, to, w) {
   if (from === to) return { path: [from], cost: 0 };
@@ -581,6 +589,7 @@ function recomputeTraffic() {
   applyIncidents(null, true);
 }
 function applyIncidents(_, belief) {
+  if (belief) timeRoutes.clear();
   const T = belief ? 'kTraffic' : 'traffic', B = belief ? 'kBlocked' : 'blocked';
   // the fleet sees live traffic, so the baseline is in both; only incidents stay hidden until a car is near
   const lam = Math.min(1, loadAt(S.t) + (S.rush ? 0.35 : 0)), k = lam * dayFactor(SEED);
