@@ -58,6 +58,18 @@ for (const route of [[0], [0, 1]]) {
   context.renderMap(100);
   assert.equal(record.body.attrs.transform, 'rotate(170.0) scale(0.95)', 'stopped and zero-progress cars retain their last display heading');
   assert.equal(JSON.stringify(car), before, 'rendering a stopped car leaves authoritative car fields unchanged');
+  if (route.length > 1) {
+    record.heading = 180;
+    car.state = 'hold';
+    context.renderMap(116);
+    const stoppedPose = record.grp.attrs.transform;
+    assert.equal(stoppedPose, 'translate(100.00 99.55) scale(1.0000)', 'a westbound car holds in its right-hand lane');
+    car.prog = 0.01;
+    context.edgeAt = () => ({ x: 100, y: 100, ang: 180 });
+    context.renderMap(132);
+    assert.equal(record.grp.attrs.transform, stoppedPose, 'starting a held car does not jump across the road');
+    assert.equal(car.ang, 0, 'lane placement does not write its heading into the simulation');
+  }
 }
 const ribbonContext = vm.createContext({ MK: 1 });
 vm.runInContext(functionOf(pages[1], 'writeRibbon'), ribbonContext);

@@ -1498,11 +1498,11 @@ function renderMap(now) {
   for (const c of S.cars) {
     const r = carEls.get(c);
     const p = carPos(c);
-    // drive on the right: offset from the centreline
-    let ox = 0, oy = 0;
-    if (c.seg < c.path.length - 1) { const e = E(c.path[c.seg], c.path[c.seg + 1]); const a = p.ang * Math.PI / 180, o = e && e.oneway ? 0 : LANE; ox = -Math.sin(a) * o; oy = Math.cos(a) * o; }
     const target = c.livePos || (c.seg < c.path.length - 1 && c.prog > 0) ? p.ang : r.heading ?? p.ang;
     const heading = displayHeading(r, target, now, reduceMotion);
+    // drive on the right: offset from the centreline
+    let ox = 0, oy = 0;
+    if (c.seg < c.path.length - 1) { const e = E(c.path[c.seg], c.path[c.seg + 1]); const a = target * Math.PI / 180, o = e && e.oneway ? 0 : LANE; ox = -Math.sin(a) * o; oy = Math.cos(a) * o; }
     r.grp.setAttribute('transform', `translate(${(p.x + ox).toFixed(2)} ${(p.y + oy).toFixed(2)}) scale(${UI.toFixed(4)})`);
     r.sx = p.x + ox; r.sy = p.y + oy;
     const crowd = S.cars.some((o) => { const q = carEls.get(o); return o.i < c.i && q.sx != null && Math.abs(q.sx - r.sx) < tagSize * 2.4 * UI && Math.abs(q.sy - r.sy) < tagSize * 2.2 * UI; });

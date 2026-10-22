@@ -1973,11 +1973,11 @@ function renderMap(now) {
   for (const c of S.cars) {
     const m = carMeshes.get(c);
     const p = carPos(c);
-    let ce = null;
-    let ox = 0, oy = 0;
-    if (c.seg < c.path.length - 1) { ce = E(c.path[c.seg], c.path[c.seg + 1]); const a = p.ang * Math.PI / 180, o = ce && ce.oneway ? 0 : LANE; ox = -Math.sin(a) * o; oy = Math.cos(a) * o; }
     const target = c.livePos || (c.seg < c.path.length - 1 && c.prog > 0) ? p.ang : m.heading ?? p.ang;
     const heading = displayHeading(m, target, now, reduceMotion);
+    let ce = null;
+    let ox = 0, oy = 0;
+    if (c.seg < c.path.length - 1) { ce = E(c.path[c.seg], c.path[c.seg + 1]); const a = target * Math.PI / 180, o = ce && ce.oneway ? 0 : LANE; ox = -Math.sin(a) * o; oy = Math.cos(a) * o; }
     const [x, z] = W3(p.x + ox, p.y + oy);
     m.g.position.set(x, ce && ce.elevated ? ELEV_Y : 0, z); m.g.rotation.y = -heading * Math.PI / 180; m.g.scale.setScalar(m.base * MK);
     m.lamp.material = MAT['lamp-' + (LAMP[c.state] || 'paint-2')];
