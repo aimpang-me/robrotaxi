@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&family=Overpass+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-:root { color-scheme: dark; --bg: #2a2927; --panel: #32312e; --line: #4a4843; --text: #edebe3; --muted: #bdbab0; --yellow: #f2c230; --green: #4fb67a; --blue: #5b98e6; }
+:root { color-scheme: dark; --bg: #2a2927; --panel: #32312e; --line: #4a4843; --text: #edebe3; --muted: #bdbab0; --yellow: #f2c230; --green: #4fb67a; --blue: #5b98e6; --link: #6fa4ec; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Overpass, system-ui, sans-serif; }
 main { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
@@ -23,7 +23,7 @@ tr:last-child td { border-bottom: 0; }
 td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; font-family: 'Overpass Mono', ui-monospace, monospace; }
 .tag { font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 2px; background: var(--yellow); color: #1c1c1c; }
 .tag.done { background: var(--green); }
-a { color: var(--blue); }
+a { color: var(--link); }
 .empty { padding: 16px; color: var(--muted); }
 .demo { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .demo a { display: inline-flex; align-items: center; min-height: 32px; text-decoration: none; padding: 7px 12px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-weight: 600; font-size: 14px; }
@@ -48,9 +48,15 @@ td:last-child a { display: inline-flex; align-items: center; min-height: 32px; p
 <script>
 const money = (x) => '$' + Math.round(x).toLocaleString('en-US');
 const td = (t, cls) => { const e = document.createElement('td'); if (cls) e.className = cls; e.textContent = t; return e; };
+let lastData = ''; // JSON of what is on screen: the 3 s poll only rebuilds the tables when the data changed
 async function load() {
   try {
     const [games, board] = await Promise.all([fetch('/api/games').then((r) => r.json()), fetch('/api/leaderboard').then((r) => r.json())]);
+    const key = JSON.stringify([games, board]);
+    if (key === lastData) return; // unchanged: leave the DOM (and keyboard focus) alone
+    // a rebuild replaces the row links; remember keyboard focus and restore it to the same row afterwards
+    const focused = document.activeElement;
+    const focusedHref = focused && focused.closest && focused.closest('#live a, #board a') ? focused.getAttribute('href') : null;
     const live = document.getElementById('live'); live.replaceChildren();
     const active = games.filter((g) => !g.over).concat(games.filter((g) => g.over).slice(-5));
     if (!active.length) { const tr = document.createElement('tr'); const c = td('No games yet. Connect a model and call new_game.', 'empty'); c.colSpan = 6; tr.append(c); live.append(tr); }
@@ -68,6 +74,8 @@ async function load() {
       tr.append(td(String(i + 1), 'num'), td(r.player), td(r.model), seed, td(r.finished ? `${(r.finishMin / 60).toFixed(2)} h` : 'DNF', 'num'), td(money(r.revenue), 'num'), td(String(r.trips), 'num'), td(String(r.decisions), 'num'));
       b.append(tr);
     });
+    lastData = key;
+    if (focusedHref) { const again = [...document.querySelectorAll('#live a, #board a')].find((a) => a.getAttribute('href') === focusedHref); if (again) again.focus({ preventScroll: true }); }
   } catch (e) { console.error(e); }
 }
 load(); setInterval(load, 3000);

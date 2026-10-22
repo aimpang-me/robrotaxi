@@ -129,7 +129,14 @@
   slider.value = String(Math.round(volume * 100)); output.textContent = slider.value + '%';
   slider.addEventListener('input', () => { volume = +slider.value / 100; output.textContent = slider.value + '%'; persist(); if (state === 'on' && !document.hidden) sound.ramp(sound.master.gain, volume); });
   async function load() {
-    const response = await fetch(new URL('audio/manifest.json', scriptURL)); if (!response.ok) throw new Error('City sounds are unavailable.');
+    // A page opened from file:// has an opaque origin, so browsers refuse to fetch the manifest and
+    // the clips: report the supported local-server workflow instead of a generic "unavailable" error.
+    // (scriptURL is file: for a locally opened page; the inline test harness passes an http URL.)
+    if (/^file:/.test(scriptURL || '')) throw new Error('City sound needs the page served over HTTP (for example `python3 -m http.server`), not opened as a file.');
+    let response;
+    try { response = await fetch(new URL('audio/manifest.json', scriptURL)); }
+    catch { throw new Error('City sounds could not be loaded. Serve the page over HTTP and try again.'); }
+    if (!response.ok) throw new Error('City sounds are unavailable.');
     const manifest = await response.json(), buffers = new Map();
     await Promise.all(Object.entries(manifest.clips).map(async ([key, clip]) => {
       try {
