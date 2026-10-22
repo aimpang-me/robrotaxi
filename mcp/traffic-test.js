@@ -10,8 +10,8 @@ const graph = {
   edges: [[0, 1], [1, 2], [2, 3], [3, 4], [5, 1], [1, 6], [7, 2], [2, 8]].map(([a, b]) => [a, b, 0, 50, 0, []]),
   districts: [{ name: 'Fixture', node: 1, w: 1 }], hq: { name: 'HQ', node: 0 }, chargers: [], landmarks: [],
 };
-const fixtureSource = source.replace(/const ROBRO_MAP = \{ graph: [^\n]+/, 'const ROBRO_MAP = { graph: ' + JSON.stringify(graph) + ' };');
-function fixture(real = false) {
+function fixture(real = false, map = graph) {
+  const fixtureSource = source.replace(/const ROBRO_MAP = \{ graph: [^\n]+/, 'const ROBRO_MAP = { graph: ' + JSON.stringify(map) + ' };');
   const context = vm.createContext({ console });
   new vm.Script(real ? source : fixtureSource).runInContext(context);
   vm.runInContext(`
@@ -89,6 +89,14 @@ test('a bus reserves an entire short connector chain atomically', () => {
   assert(!Object.values(f.world.traffic.locks).some((l) => l.id === bus.id), 'denied bus owns no partial chain');
   for (let i = 0; i < 35; i++) { f.move(); assertBodies(f); }
   assert(bus.roadDistance > 3 && cross.roadDistance > 3);
+});
+test('opposing vehicles clear their previous junction while yielding to the next one', () => {
+  const map = json(graph); map.nodes[2][0] = 10.9; map.nodes[3][0] = 11.8;
+  const f = fixture(false, map);
+  const a = f.add('T-01', [0, 1, 2, 8], 9.8, { length: .58 });
+  const b = f.add('T-02', [7, 2, 1, 6], 9.8);
+  for (let i = 0; i < 30; i++) { f.move(); assertBodies(f); }
+  assert(a.roadDistance > 3 && b.roadDistance > 3, 'neither vehicle keeps its previous node locked while it can clear its rear');
 });
 test('route replacement retains the rear body on the previous edge', () => {
   const f = fixture(), car = f.add('T-01', [0, 1, 2, 3, 4], 9.7, { length: 1.1 });

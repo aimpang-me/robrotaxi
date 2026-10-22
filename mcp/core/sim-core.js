@@ -782,9 +782,10 @@ function roadTrafficStep(dt) {
   for (const g of traffic.ghosts) occupy(g.id, g.parts);
   const proposals = actors.map((v) => {
     const desired = roadDesired(v, dt, ambient.has(v)), half = roadLength(v) / 2;
-    const ahead = roadAhead(v, desired + roadLength(v) + ROAD_GAP + NODE_CLEARANCE);
+    const space = roadLength(v) + Math.max(ROAD_GAP, 2 * NODE_CLEARANCE);
+    const ahead = roadAhead(v, desired + space + NODE_CLEARANCE);
     let end = v.seg + ahead.length;
-    while (ahead.length && ahead[ahead.length - 1].e.len < roadLength(v) + ROAD_GAP && end < v.path.length - 1) {
+    while (ahead.length && ahead[ahead.length - 1].e.len < space && end < v.path.length - 1) {
       const last = ahead[ahead.length - 1], a = v.path[end], b = v.path[end + 1];
       ahead.push({ a, b, e: E(a, b), offset: last.offset + last.e.len }); end++;
     }
@@ -798,10 +799,10 @@ function roadTrafficStep(dt) {
       if (v.prog < half + NODE_CLEARANCE) nodesWanted.push({ node: first.a, at: -v.prog });
       const boundary = first.offset + first.e.len;
       if (limit + half + NODE_CLEARANCE >= boundary) {
-        let clearance = boundary + roadLength(v) + ROAD_GAP;
+        let clearance = boundary + space;
         for (let i = 1; i < ahead.length; i++) {
-          clearance = ahead[i].offset + roadLength(v) + ROAD_GAP;
-          if (ahead[i].e.len >= roadLength(v) + ROAD_GAP) break;
+          clearance = ahead[i].offset + space;
+          if (ahead[i].e.len >= space) break;
         }
         let room = Infinity;
         for (const p of ahead) for (const body of lanes.get(p.a + '-' + p.b) || []) {
@@ -821,7 +822,7 @@ function roadTrafficStep(dt) {
     const { v, half } = p;
     const conflict = p.nodesWanted.find(({ node }) => traffic.locks[node] && traffic.locks[node].id !== v.id);
     if (conflict) {
-      const first = p.nodesWanted[0];
+      const first = p.nodesWanted.find(({ node }) => traffic.locks[node]?.id !== v.id);
       p.limit = Math.min(p.limit, Math.max(0, first.at - half - NODE_CLEARANCE));
     } else if (p.limit > 1e-10) {
       for (const { node, at } of p.nodesWanted) traffic.locks[node] = {
