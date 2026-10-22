@@ -3,6 +3,14 @@ const fs = require('fs'), path = require('path');
 const crypto = require('crypto');
 const source = require('./source/lake-ontario-shoreline.json');
 const { removeLegacyNonBuildings } = require('./building-tags');
+const pond = require('./source/sanctuary-pond.json');
+
+function sourcePoint([lon, latitude]) {
+  const { s, w, n } = source.bbox, lat = (n + s) / 2 * Math.PI / 180;
+  const mLat = 111132.92 - 559.82 * Math.cos(2 * lat) + 1.175 * Math.cos(4 * lat);
+  const mLon = 111412.84 * Math.cos(lat) - 93.5 * Math.cos(3 * lat);
+  return [(lon - w) * mLon / 10, (n - latitude) * mLat / 10];
+}
 
 function ringInside(inner, outer) {
   const points = (ring) => Array.from({ length: ring.length / 2 }, (_, i) => [ring[i * 2], ring[i * 2 + 1]]);
@@ -106,7 +114,11 @@ function applyMainland(scene) {
   scene.mainlandPolygons = mainland.length;
   const invalid = new Set(source.legacyOpenWaterPolygons.map((p) => p.sha256));
   scene.water = scene.water.filter((ring) => !invalid.has(crypto.createHash('sha256').update(JSON.stringify(ring)).digest('hex')));
-  scene.waterHoles = scene.water.map((outer) => scene.land.slice(scene.mainlandPolygons).filter((inner) => ringInside(inner, outer)));
+  const islets = scene.land.slice(scene.mainlandPolygons).map((ring) => {
+    const hash = crypto.createHash('sha256').update(JSON.stringify(ring)).digest('hex');
+    return hash === pond.islet.legacyLandSha256 ? pond.islet.geometry.slice(0, -1).flatMap(sourcePoint) : ring;
+  });
+  scene.waterHoles = scene.water.map((outer) => islets.filter((inner) => ringInside(inner, outer)));
   return scene;
 }
 
