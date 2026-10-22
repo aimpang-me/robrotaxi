@@ -816,9 +816,9 @@ function roadTrafficStep(dt) {
       if (v.prog < half + NODE_CLEARANCE) nodesWanted.push({ node: first.a, at: -v.prog });
       const boundary = first.offset + first.e.len;
       if (limit + half + NODE_CLEARANCE >= boundary) {
-        let clearance = boundary + space;
+        let clearance = boundary + half + NODE_CLEARANCE;
         for (let i = 1; i < ahead.length; i++) {
-          clearance = ahead[i].offset + space;
+          clearance = ahead[i].offset + half + NODE_CLEARANCE;
           if (ahead[i].e.len >= space) break;
         }
         let room = Infinity;
@@ -828,7 +828,7 @@ function roadTrafficStep(dt) {
         if (room < clearance && v.path.length - v.seg > 2) limit = Math.min(limit, Math.max(0, boundary - half - NODE_CLEARANCE));
         else for (const p of ahead) {
           const at = p.offset + p.e.len;
-          if (at <= clearance) nodesWanted.push({ node: p.b, at });
+          if (at <= Math.max(clearance, limit + half + NODE_CLEARANCE)) nodesWanted.push({ node: p.b, at });
         }
       }
     }

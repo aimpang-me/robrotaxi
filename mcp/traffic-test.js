@@ -131,6 +131,16 @@ test('opposing vehicles clear their previous junction while yielding to the next
   for (let i = 0; i < 30; i++) { f.move(); assertBodies(f); }
   assert(a.roadDistance > 3 && b.roadDistance > 3, 'neither vehicle keeps its previous node locked while it can clear its rear');
 });
+test('an eight-metre turnaround does not trap an entering and exiting vehicle', () => {
+  const map = json(graph); map.nodes[2][0] = 10.824621125123526;
+  map.edges = map.edges.filter(([a, b]) => a !== 2 && b !== 2 || a === 1 && b === 2);
+  const f = fixture(false, map);
+  const entering = f.add('T-01', [0, 1, 2, 1, 6], 9.905401859477133, { length: .5 });
+  const exiting = f.add('T-02', [2, 1, 6], .4846211251235265, { length: .44 });
+  f.world.traffic.locks[1] = { id: entering.id, clearAt: .46459814052286674, parkUntil: f.world.traffic.clock + 2 };
+  for (let i = 0; i < 40; i++) { f.move(); assertBodies(f); }
+  assert(entering.roadDistance > 2 && exiting.roadDistance > 2, 'both vehicles clear without releasing an occupied junction or teleporting');
+});
 test('route replacement retains the rear body on the previous edge', () => {
   const f = fixture(), car = f.add('T-01', [0, 1, 2, 3, 4], 9.7, { length: 1.1 });
   f.move();
