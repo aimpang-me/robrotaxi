@@ -54,29 +54,35 @@
       }
       trim.push([box(l / 2 + .025, belt * .7, 0, .06, .13, w * .68), '#eee9cd'], [box(-l / 2 - .025, belt * .7, 0, .06, .12, w * .7), '#bd3a31']);
       for (const x of [-l / 2, l / 2]) trim.push([box(x, .36, 0, .1, .12, w * .9), '#4b504d']);
-      return [merge(paint), merge(trim)];
+      return [merge(paint), merge(trim), box(l / 2 + .07, belt * .7, 0, .1, .1, w * .68), box(-l / 2 - .07, belt * .7, 0, .1, .1, w * .7)];
     };
     const painted = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: .32, roughness: .42 });
     const details = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .64, metalness: .12 });
+    const frontLamp = new THREE.MeshBasicMaterial({ color: 0xf4f5df, fog: false, transparent: true, opacity: 0, depthWrite: false });
+    const rearLamp = new THREE.MeshBasicMaterial({ color: 0xea3030, fog: false, transparent: true, opacity: 0, depthWrite: false });
     const pools = new Map(), matrix = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), pos = new THREE.Vector3(), scale = new THREE.Vector3(1, 1, 1), color = new THREE.Color();
     const poolFor = (model, count) => {
       let p = pools.get(model); if (p && p.capacity >= count) return p;
       const capacity = Math.max(32, 2 ** Math.ceil(Math.log2(Math.max(1, count))));
       const geos = p ? p.meshes.map((m) => m.geometry) : geometry(models[model]);
-      if (p) for (const m of p.meshes) { H.scene.remove(m); m.dispose(); }
+      if (p) for (const m of p.meshes) H.scene.remove(m);
       const meshes = geos.map((g, i) => {
-        const m = new THREE.InstancedMesh(g, i ? details : painted, capacity);
-        m.name = `traffic-${model}-${i ? 'details' : 'paint'}`; m.frustumCulled = false;
-        m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.castShadow = m.receiveShadow = true; H.scene.add(m); return m;
+        const m = new THREE.InstancedMesh(g, [painted, details, frontLamp, rearLamp][i], capacity);
+        m.name = `traffic-${model}-${['paint', 'details', 'front-lamps', 'rear-lamps'][i]}`; m.frustumCulled = false;
+        m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.castShadow = i < 2; m.receiveShadow = i < 2; H.scene.add(m); return m;
       });
       p = { capacity, meshes }; pools.set(model, p); return p;
     };
     draw = (vehicles) => {
+      const lampsVisible = H.night > 0.04;
+      frontLamp.opacity = rearLamp.opacity = H.night;
+      for (const p of pools.values()) { p.meshes[2].visible = lampsVisible; p.meshes[3].visible = lampsVisible; }
       const byModel = new Map(Object.keys(models).map((k) => [k, []]));
       for (const v of vehicles) byModel.get(models[v.model] ? v.model : 'sedan').push(v);
       for (const [model, list] of byModel) {
         if (!list.length && !pools.has(model)) continue;
         const p = poolFor(model, list.length);
+        p.meshes[2].visible = lampsVisible; p.meshes[3].visible = lampsVisible;
         list.forEach((v, i) => {
           const t = pose(v), [x, z] = H.W3(t.x, t.y), s = v.length * 10 / models[model].l;
           pos.set(x, t.deck + .035, z); q.setFromAxisAngle(up, -t.a); scale.set(s, s, s); matrix.compose(pos, q, scale);
