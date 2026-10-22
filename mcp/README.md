@@ -48,7 +48,9 @@ node play-cli.js act @turn.json
 No dependencies. Talks to the live server unless `ROBRO_URL` is set (e.g. `http://localhost:8787/mcp`). The session is kept in `.robro-session` in the current folder. A ready-made agent prompt is in [../deploy/grok-play-prompt.md](../deploy/grok-play-prompt.md).
 
 ## Traffic
-Background traffic is a per-road load that follows the time of day (`loadAt` and `applyIncidents` in the page sim). The views draw cars, vans and buses from the same numbers (`viewer/traffic.js`), so slow roads have a visible reason. Only real jams (incidents and the queues behind them) are painted on the road.
+The simulation owns 240 seeded background vehicles: sedans, hatchbacks, SUVs, vans and buses. They circulate on through streets, follow legal road directions, keep physical following gaps and yield at unsignalized junctions. Destination-free background routes skip terminal street branches; taxis can still enter them to serve riders. Robotaxis share the same lane occupancy, so a queue can delay a pickup or drop-off. Parked taxis wait off the through lane and enter when there is room. There are no traffic lights.
+
+Public road-load estimates still follow the time of day. Routing and `rider_options` include that load and sensed incidents; immediate vehicle queues can add delay beyond an ETA. Ambient vehicles never reveal hidden incidents to the dispatcher. The 2D and 3D views draw the authoritative vehicles with stable models and colours; playback interpolation does not move the simulation.
 
 ## Watch a game
 
@@ -87,17 +89,9 @@ Every action needs a `reason` (1-2 sentences, required). `act` and `advance` als
 
 - Ranked seeds: 1101, 2207, 3313, 4421, 5531 (standard settings). Every model gets the same riders and hazards on a seed.
 - Every finished game appends a line to `runs/results.jsonl` (player, model, MCP client name, seed, finish time, revenue, trips, decisions, tool calls) and writes the full decision log and feed to `runs/logs/<game>.json`.
-- `node bench.js` replays the reference dispatchers on the ranked seeds.
+- `node bench.js` replays the four reference dispatchers on all ranked seeds in bounded independent workers. Set `ROBRO_BENCH_JOBS=1` for serial replay, or `ROBRO_BENCH_OUTPUT=results.json` to save machine-readable scores. Wall time is not the score.
 
-Reference results on the ranked seeds (sim hours to $1M, DNF = not reached in 24 h):
-
-| Dispatcher | 1101 | 2207 | 3313 | 4421 | 5531 |
-|---|---|---|---|---|---|
-| Executor alone (nearest car) | 16.6 | DNF $911k | DNF $883k | 22.3 | 13.6 |
-| Lazy (oldest rider, any free car) | 17.1 | DNF | DNF | DNF | 15.4 |
-| Built-in scripted agent | 10.5 | 10.4 | 10.4 | 9.9 | 10.4 |
-| Greedy fare-per-minute (`bots.js`) | 7.2 | 7.1 | 6.7 | 7.1 | 8.0 |
-| Greedy, skips low-value rides | 7.0 | 6.4 | 6.0 | 6.3 | 7.7 |
+Recorded before/after results and the dispatcher-order check are in [the physical traffic balance report](benchmarks/physical-traffic.md). Finishing runs rank by sim time; unfinished runs rank by revenue.
 
 ## Test
 
@@ -108,6 +102,17 @@ CALL_DELAY_MS=80 MCP_URL=https://<your-host>/mcp npm test   # against a hosted s
 ```
 
 The test client is a scripted stub (no LLM) that uses only the MCP tools.
+
+Additional checks, from the repository root:
+
+```sh
+node mcp/traffic-test.js         # physical gaps, yielding, route changes, parking, determinism
+node mcp/traffic-view-test.js    # authoritative poses and live interpolation
+node mcp/pacing-test.js          # pause and speed preserve the authoritative result
+node mcp/route-cache-test.js     # cached and uncached routing agree
+node mcp/presentation-test.js    # both page simulations agree; presentation invariants
+node map/mainland-test.js       # mainland, harbour, river and generated map parity
+```
 
 ## Files
 
