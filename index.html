@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>RobroTaxi HQ</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -43,8 +48,9 @@
   --r: 4px;
   --ease: cubic-bezier(.16, 1, .3, 1);
 }
-html, body { height: 100%; }
+html, body { height: 100%; min-width: 320px; }
 body {
+  margin: 0;
   background: var(--asphalt);
   color: var(--paint);
   font-family: var(--f-ui);
@@ -54,7 +60,7 @@ body {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 ::selection { background: var(--yellow); color: var(--yellow-ink); }
-* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -125,7 +131,7 @@ main {
   gap: 12px;
   min-height: 0;
 }
-.rail { background: var(--asphalt-2); border: 1px solid var(--line); border-radius: var(--r); min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.rail { background: var(--asphalt-2); border: 1px solid var(--line); border-radius: var(--r); min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .rail-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 12px 14px 10px; }
 .rail-h h2 { font-size: var(--t-sm); font-weight: 800; text-transform: uppercase; letter-spacing: .1em; }
 .rail-h span { color: var(--muted); font-size: var(--t-sm); }
@@ -137,15 +143,15 @@ main {
 .car-btn {
   width: 100%; text-align: left; background: transparent; border: 1px solid transparent; border-radius: var(--r);
   display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 8px; row-gap: 3px;
-  padding: 8px; align-items: center;
+  padding: 8px; min-height: 62px; align-items: center;
 }
 .car-btn:hover { background: var(--asphalt-3); }
 .car-btn[aria-pressed="true"] { border-color: var(--yellow); background: var(--asphalt-3); }
 .car-id { grid-row: 1 / 3; font-family: var(--f-num); font-weight: 600; font-size: var(--t-lg); }
 .car-state { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--t-sm); font-weight: 700; }
 .car-state i { width: 8px; height: 8px; border-radius: 2px; flex: none; background: var(--paint-2); }
-.car-state em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.car-job { grid-column: 2 / 4; font-size: var(--t-sm); color: var(--paint-2); line-height: 1.35; }
+.car-state em { font-style: normal; overflow-wrap: anywhere; line-height: 1.25; }
+.car-job { min-width: 0; overflow-wrap: anywhere; grid-column: 2 / 4; font-size: var(--t-sm); color: var(--paint-2); line-height: 1.35; }
 .bat { grid-column: 3; grid-row: 1; display: flex; align-items: center; gap: 6px; }
 .bat-num { font-family: var(--f-num); font-size: var(--t-sm); font-weight: 600; min-width: 3.2ch; text-align: right; order: 2; }
 .bat-bar { width: 50px; height: 6px; background: var(--road); position: relative; overflow: hidden; border-radius: 1px; }
@@ -172,7 +178,7 @@ main {
 .metric { padding: 10px 14px 11px; display: grid; gap: 2px; align-content: start; min-width: 0; }
 .metric + .metric { border-left: 1px solid var(--line); }
 .metric h3 { font-size: var(--t-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--paint-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.metric .v { font-family: var(--f-num); font-size: var(--t-2xl); font-weight: 600; line-height: 1.15; }
+.metric .v { font-variant-numeric: tabular-nums; font-family: var(--f-num); font-size: var(--t-2xl); font-weight: 600; line-height: 1.15; }
 .metric .v small { font-size: var(--t-sm); color: var(--paint-2); font-weight: 500; margin-left: 2px; }
 .metric .cmp { font-size: var(--t-sm); color: var(--muted); min-height: 2.8em; line-height: 1.4; }
 .chart p { margin: 2px 0 0; font-size: var(--t-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -275,9 +281,9 @@ main {
 .agentrail { grid-area: agent; }
 .agent { padding: 0 14px 14px; display: grid; gap: 10px; }
 .agent-copy { margin: 0; color: var(--paint-2); font-size: var(--t-md); }
-.field { display: grid; gap: 4px; }
+.field { display: grid; gap: 4px; min-width: 0; }
 .field label, .wt label { font-size: var(--t-xs); font-weight: 700; color: var(--paint-2); text-transform: uppercase; letter-spacing: .06em; }
-.field input { height: 32px; padding: 0 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--road); font-family: var(--f-num); font-size: var(--t-sm); }
+.field input { min-width: 0; width: 100%; height: 32px; padding: 0 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--road); font-family: var(--f-num); font-size: var(--t-sm); }
 .field input:focus-visible { outline-offset: 0; }
 .weights { display: grid; gap: 8px; }
 .wt { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
@@ -298,7 +304,7 @@ main {
 .agent:not([data-state="on"]) .on-only { display: none; }
 .agent-id { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: center; padding: 10px 12px; border-radius: var(--r); background: var(--road); }
 .agent-id svg { grid-row: 1 / 3; width: 22px; height: 22px; color: var(--yellow); }
-.agent-id b { font-size: var(--t-md); }
+.agent-id b { font-size: var(--t-md); overflow-wrap: anywhere; }
 .agent-id span { font-size: var(--t-sm); color: var(--paint-2); font-family: var(--f-num); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .handshake { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-family: var(--f-num); font-size: var(--t-sm); color: var(--paint-2); }
 .handshake li { display: grid; grid-template-columns: 14px 1fr; gap: 6px; animation: rise .45s var(--ease) both; }
@@ -341,7 +347,10 @@ main {
 
 @media (max-width: 1440px) {
   main { grid-template-columns: 256px minmax(0, 1fr) 328px; }
-  .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(150px, 1fr); }
+  .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .chart { grid-column: 1 / -1; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr); column-gap: 12px; align-items: center; }
+  .chart svg { grid-column: 2; grid-row: 1 / 3; height: 38px; margin: 0; }
+  .chart p { white-space: normal; }
   .metric { padding-inline: 12px; }
 }
 @media (max-width: 1100px) {
@@ -366,13 +375,14 @@ main {
   .agent-pill { order: 2; }
   .ctrls { order: 3; width: 100%; gap: 8px 10px; }
   .clock { margin-right: auto; }
-  .maptag { display: none; }
+  .maptag { max-width: calc(100% - 12px); left: 6px; bottom: 6px; padding: 3px 6px; background: var(--road); line-height: 1.3; }
+  .map-help { display: none; }
   .top { gap: 10px 14px; }
 }
 @media (max-width: 560px) {
   .mapwrap { aspect-ratio: auto; }
-  .mapscroll { position: relative; }
-  #map { position: relative; width: 100%; height: auto; aspect-ratio: 980 / 690; }
+  .mapscroll { position: relative; overflow-x: auto; }
+  #map { position: relative; width: 720px; max-width: none; height: auto; aspect-ratio: 980 / 690; }
 }
 @media (pointer: coarse), (max-width: 560px) {
   .btn, .seg button, .seedctl input, .field input, .agent[data-state="on"] .connect, .connect { height: 44px; }
@@ -381,7 +391,7 @@ main {
   .switch input { width: 40px; height: 24px; border-radius: 12px; }
   .switch input::after { width: 18px; height: 18px; top: 3px; left: 3px; }
   .switch input:checked::after { transform: translateX(16px); }
-  .wt input { height: 32px; }
+  .wt input { height: 44px; }
   .tune summary { padding-block: 10px; }
   .tune[open] summary { margin-bottom: 0; }
 }
@@ -389,6 +399,8 @@ main {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 </style>
+</head>
+<body>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
@@ -457,7 +469,7 @@ main {
           <g id="gCars"></g>
           <g id="gHit"></g>
         </svg></div>
-        <div class="maptag">Scroll to zoom · drag to pan · map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, ODbL</div>
+        <div class="maptag"><span class="map-help">Scroll to zoom · drag to pan · </span>Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, ODbL</div>
         <div class="toast" id="toast" data-show="false"></div>
       </div>
       <div class="tools" role="toolbar" aria-label="Incidents and rides">
@@ -1820,3 +1832,6 @@ window.__robro = { main: () => MAIN, shadow: () => SHADOW, run(n) { for (let i =
 requestAnimationFrame(frame);
 })();
 </script>
+
+</body>
+</html>

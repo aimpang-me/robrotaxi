@@ -7,8 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&family=Overpass+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-:root { --bg: #16181c; --panel: #1f2227; --line: #2e323a; --text: #f2f0e8; --muted: #9a9ca3; --yellow: #f5c518; --green: #3ecf6e; --blue: #4aa3ff; }
-@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg: #f4f3ef; --panel: #ffffff; --line: #e1dfd8; --text: #17181b; --muted: #6b6d73; --yellow: #c99a00; --green: #1f9d4c; --blue: #1f6fd1; } }
+:root { color-scheme: dark; --bg: #2a2927; --panel: #32312e; --line: #4a4843; --text: #edebe3; --muted: #bdbab0; --yellow: #f2c230; --green: #4fb67a; --blue: #5b98e6; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Overpass, system-ui, sans-serif; }
 main { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
@@ -16,18 +15,24 @@ h1 { font-size: 28px; font-weight: 800; margin: 0 0 4px; letter-spacing: -.01em;
 h1 span { color: var(--yellow); }
 h2 { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 32px 0 8px; }
 p.lede { color: var(--muted); margin: 0 0 8px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: top; }
+th { border-bottom-style: dashed; color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
 tr:last-child td { border-bottom: 0; }
-td.num, th.num { text-align: right; font-family: 'Overpass Mono', ui-monospace, monospace; }
-.tag { font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 5px; background: var(--yellow); color: #121418; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; font-family: 'Overpass Mono', ui-monospace, monospace; }
+.tag { font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 2px; background: var(--yellow); color: #1c1c1c; }
 .tag.done { background: var(--green); }
 a { color: var(--blue); }
 .empty { padding: 16px; color: var(--muted); }
 .demo { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-.demo a { text-decoration: none; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-weight: 600; font-size: 14px; }
+.demo a { display: inline-flex; align-items: center; min-height: 32px; text-decoration: none; padding: 7px 12px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-weight: 600; font-size: 14px; }
+td:nth-child(2), td:nth-child(3) { max-width: 240px; white-space: normal; overflow-wrap: anywhere; }
+td:last-child a { display: inline-flex; align-items: center; min-height: 32px; padding-inline: 4px; }
+:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.demo a:hover { border-color: var(--yellow); }
+@media (max-width: 560px) { main { padding: 24px 12px 48px; } h1 { font-size: 24px; } .demo a { width: 100%; } }
+@media (pointer: coarse), (max-width: 560px) { .demo a, td:last-child a { min-height: 44px; } td:last-child a { min-width: 44px; justify-content: center; } }
 </style>
 </head>
 <body>
