@@ -383,7 +383,9 @@ main {
 @media (max-width: 560px) {
   .mapwrap { aspect-ratio: auto; }
   .mapscroll { position: relative; overflow-x: auto; }
-  #map { position: relative; width: 720px; max-width: none; height: auto; aspect-ratio: 980 / 690; }
+  /* 720px sideways-scrolling strip: match the real viewBox aspect (set by applyView) so the map
+     fills the box instead of letterboxing, and let touch panning scroll the strip natively. */
+  #map { position: relative; width: 720px; max-width: none; height: auto; aspect-ratio: var(--map-aspect, 1.044); touch-action: auto; }
 }
 @media (pointer: coarse), (max-width: 560px) {
   .btn, .seg button, .seedctl input, .field input, .agent[data-state="on"] .connect, .connect { height: 44px; }
@@ -1503,6 +1505,7 @@ const VB = { x: PLAYB.x0, y: PLAYB.y0, w: PLAYB.x1 - PLAYB.x0, h: PLAYB.y1 - PLA
 const VB_HOME = { ...VB };
 let UI = VB.w / 980;       // map units per screen-ish pixel of the old 980-wide map; markers scale with it
 function applyView() {
+  $('map').style.setProperty('--map-aspect', (VB_HOME.w / VB_HOME.h).toFixed(4)); // the <=560 strip uses this instead of the stale 980/690
   $('map').setAttribute('viewBox', `${VB.x.toFixed(1)} ${VB.y.toFixed(1)} ${VB.w.toFixed(1)} ${VB.h.toFixed(1)}`);
   const r = $('map').getBoundingClientRect();
   const k = Math.min((r.width || 980) / VB.w, (r.height || 690) / VB.h) || 1;
@@ -1519,9 +1522,18 @@ function zoomAt(f, cx, cy) {
 function svgPoint(ev) { const svg = $('map'); const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY; return pt.matrixTransform(svg.getScreenCTM().inverse()); }
 {
   const svg = $('map');
-  svg.addEventListener('wheel', (ev) => { ev.preventDefault(); const p = svgPoint(ev); zoomAt(Math.exp(ev.deltaY * 0.0015), p.x, p.y); }, { passive: false });
+  svg.addEventListener('wheel', (ev) => {
+    // below 560 px the map is a sideways-scrolling strip: a normal wheel scrolls it, while
+    // Ctrl/Cmd+wheel stays an explicit map zoom (as do pinch and drag on larger layouts).
+    const ms = $('mapscroll'), strip = innerWidth <= 560 && ms.scrollWidth > ms.clientWidth;
+    if (strip && !ev.ctrlKey && !ev.metaKey) { ev.preventDefault(); ms.scrollLeft += ev.deltaX || ev.deltaY; return; }
+    ev.preventDefault(); const p = svgPoint(ev); zoomAt(Math.exp(ev.deltaY * 0.0015), p.x, p.y);
+  }, { passive: false });
   let drag = null; const ptrs = new Map();
-  svg.addEventListener('pointerdown', (ev) => { ptrs.set(ev.pointerId, ev); if (ptrs.size === 1) drag = { x: ev.clientX, y: ev.clientY, vx: VB.x, vy: VB.y, moved: false }; else drag = null; });
+  svg.addEventListener('pointerdown', (ev) => {
+    if (innerWidth <= 560 && ev.pointerType !== 'mouse') return; // touch on the strip scrolls natively, tap still selects
+    ptrs.set(ev.pointerId, ev); if (ptrs.size === 1) drag = { x: ev.clientX, y: ev.clientY, vx: VB.x, vy: VB.y, moved: false }; else drag = null;
+  });
   svg.addEventListener('pointermove', (ev) => {
     if (ptrs.size === 2 && ptrs.has(ev.pointerId)) {
       const [a, b] = [...ptrs.values()]; const d0 = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
