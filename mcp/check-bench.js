@@ -1,4 +1,3 @@
-// Compare complete ranked replays; finish time wins, then revenue for unfinished runs.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const [beforePath, afterPath] = process.argv.slice(2);

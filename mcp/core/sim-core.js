@@ -701,7 +701,6 @@ function trafficRoads() {
       if (active[to] && neighbors[to].size < 2) queue.push(to);
     }
   }
-  // Destination-free traffic circulates on through streets instead of touring terminal courts.
   const through = adj.map((out, at) => out.filter(({ to }) => active[at] && active[to]));
   trafficNetwork = through.some((out) => out.length) ? through : adj;
   return trafficNetwork;
