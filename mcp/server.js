@@ -238,11 +238,12 @@ function makeServer(base) {
 function patchPage(file) {
   let html = fs.readFileSync(path.join(PAGES, file), 'utf8').replace(/\r\n/g, '\n'); // a Windows checkout may have CRLF
   const rep = (a, b) => { if (!html.includes(a)) throw new Error(`${file} changed: cannot find "${a.slice(0, 40)}"`); html = html.replace(a, b); };
+  rep('<head>', '<head><script>window.__robroLive = true;</script>');
   rep('function step(dt) {', 'function step(dt) {\n  if (window.__robroLive) return;');
-  rep('window.__robro = {', 'window.__robroLiveHooks = { main: () => MAIN, shadow: () => SHADOW, setShadow: (w) => { SHADOW = w; }, cloneWorld, nodes, edges, E, edgeAt, BASE, DEPOTS, recomputeTraffic, log, setAgentUI,\n  // the 3D scene graph, for modules that add to it (null on the 2D page)\n  get scene() { return typeof scene === "undefined" ? null : scene; }, get W3() { return typeof W3 === "undefined" ? null : W3; } };\nwindow.__robro = {');
+  rep('window.__robro = {', 'window.__robroLiveHooks = { main: () => MAIN, shadow: () => SHADOW, setShadow: (w) => { SHADOW = w; }, setSeed: (n) => { SEED = n; }, cloneWorld, nodes, edges, E, edgeAt, BASE, DEPOTS, recomputeTraffic, log, setAgentUI,\n  // the 3D scene graph, for modules that add to it (null on the 2D page)\n  get scene() { return typeof scene === "undefined" ? null : scene; }, get W3() { return typeof W3 === "undefined" ? null : W3; } };\nwindow.__robro = {');
   // live.js eases each car between server updates and rounds corners; it hands the page a finished pose
   rep('function carPos(c) {', 'function carPos(c) {\n  if (c.livePos) return c.livePos;');
-  return html + '\n<script src="/live.js"></script>\n<script src="/traffic.js"></script>\n';
+  return html.replace('<script src="mcp/viewer/traffic.js"></script>', '<script src="/live.js"></script><script src="/traffic.js"></script>');
 }
 const page = (res, code, type, body) => { res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store' }); res.end(body); };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);

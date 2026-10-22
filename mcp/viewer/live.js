@@ -120,6 +120,7 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
   /* ---- smooth motion: the server sends about 10 updates a second; between them each car glides
      along its route at the display frame rate, and corners are rounded ---- */
   const motion = new Map(); // car id -> { path, cum, from, to, t0, dur, ang, off }
+  const trafficMotion = new Map();
   let lastAt = 0, gap = 120;
   const sameArr = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
   const cumOf = (path) => { const c = [0]; for (let i = 1; i < path.length; i++) c.push(c[i - 1] + (H.E(path[i - 1], path[i])?.len || 0)); return c; };
@@ -130,6 +131,14 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
     let path = P, cum = cumP, from = dT, to = dT;
     if (sameArr(m.path, P)) { if (dT >= cur - 0.5) from = cur; }
     else if (m.path.length) {
+      const overlap = m.path.findIndex((_, i) => m.path.length - i <= P.length && m.path.slice(i).every((n, j) => n === P[j]));
+      if (overlap >= 0) {
+        const offset = m.cum[overlap];
+        if (cur >= offset) from = Math.min(cur - offset, dT);
+        else { path = m.path.slice(0, overlap).concat(P); cum = cumOf(path); from = cur; to = offset + dT; }
+        Object.assign(m, { path, cum, from, to, t0: now, dur: Math.min(1000, gap * 1.15) });
+        return;
+      }
       // find where the car is drawn now on the new route, or join the old route onto it
       const i = segAt(m.cum, cur), q = cur - m.cum[i], A = m.path[i], B = m.path[i + 1], atNode = q < 0.01 || B == null;
       const node = atNode ? A : (q >= m.cum[i + 1] - m.cum[i] - 0.01 ? B : null);
@@ -187,6 +196,7 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
     const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
     const S = H.main();
     for (const c of S.cars) { const m = motion.get(c.id); if (m) place(c, m, now, dt); }
+    for (const v of S.traffic?.vehicles || []) { const m = trafficMotion.get(v.id); if (m) place(v, m, now, dt); }
     requestAnimationFrame(animate);
   }
   requestAnimationFrame(animate);
@@ -197,8 +207,9 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
     for (const sc of d.cars) {
       const c = W.cars.find((x) => x.id === sc.id); if (!c) continue;
       if (c.routeVer !== sc.routeVer) c.drawT = now;
-      Object.assign(c, { state: sc.state, battery: sc.battery, chargeTo: sc.chargeTo, plugged: sc.plugged,
+      Object.assign(c, { state: sc.state, roadActive: sc.roadActive, battery: sc.battery, chargeTo: sc.chargeTo, plugged: sc.plugged,
         queueT: sc.queueT, holdUntil: sc.holdUntil, strandUntil: sc.strandUntil, routeVer: sc.routeVer });
+      c.parkNode = sc.roadActive === false ? sc.path[sc.seg] : null;
       if (smooth) {
         let m = motion.get(sc.id);
         if (!m) { m = { path: [], cum: [0], from: 0, to: 0, t0: now, dur: 1, ang: c.ang, off: 0 }; motion.set(sc.id, m); }
@@ -209,10 +220,27 @@ body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
       c.next = sc.next ? reqMap.get(sc.next) || null : null; if (c.next) c.next.car = c;
       c.known = new Set(sc.known);
     }
+    const previous = new Map((W.traffic?.vehicles || []).map((v) => [v.id, v]));
+    W.traffic = { vehicles: (d.traffic?.vehicles || []).map((sc) => {
+      const v = previous.get(sc.id) || { ...sc };
+      Object.assign(v, { model: sc.model, color: sc.color, length: sc.length, speed: sc.speed, routeVer: sc.routeVer });
+      if (smooth) {
+        let m = trafficMotion.get(sc.id);
+        if (!m) { m = { path: [], cum: [0], from: 0, to: 0, t0: now, dur: 1, ang: sc.ang, off: 1 }; trafficMotion.set(sc.id, m); }
+        retarget(m, sc, now); place(v, m, now, 0);
+      } else Object.assign(v, sc);
+      return v;
+    }) };
+    if (smooth) {
+      const ids = new Set(W.traffic.vehicles.map((v) => v.id));
+      for (const id of trafficMotion.keys()) if (!ids.has(id)) trafficMotion.delete(id);
+    }
   }
   let announced = false;
   function apply(meta, snap) {
     lastMsg = performance.now(); finished = !!(snap.score.finished || snap.score.outOfTime); external = meta.mode === 'external'; why.hidden = !external;
+    if (!announced) document.getElementById('feed').replaceChildren();
+    H.setSeed(meta.seed);
     const S = H.main();
     Object.assign(S, { t: snap.t, agent: snap.agent, agentSince: snap.agentSince, connectT: snap.connectT, rph: snap.rph, hazIdx: snap.hazIdx, rush: snap.rush, paused: false });
     const at = performance.now(); if (lastAt && at - lastAt < 1500) gap = gap * 0.8 + (at - lastAt) * 0.2; lastAt = at;
