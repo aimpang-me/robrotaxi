@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const zlib = require('zlib');
 const { randomUUID, createHash } = require('crypto');
 const { z } = require('zod');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
@@ -314,6 +315,25 @@ function patchPage(file) {
 }
 const page = (res, code, type, body) => { res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store' }); res.end(body); };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+// Viewer assets are large (map JS ~1.25 MB) and never change while the server runs, so serve them
+// gzipped and let the browser cache them; only the patched HTML stays no-store.
+const gzipOk = (req) => /(?:^|,)\s*gzip\s*(?:;|,|$)/i.test(String(req.headers['accept-encoding'] || ''));
+const assetCache = new Map(); // absolute path -> { raw, gz }
+function asset(file) {
+  let a = assetCache.get(file);
+  if (!a) { const raw = fs.readFileSync(file); a = { raw, gz: raw.length > 1024 ? zlib.gzipSync(raw, { level: 6 }) : null }; assetCache.set(file, a); }
+  return a;
+}
+function pageFile(req, res, type, file, cache = 'no-store', compress = true) {
+  const a = asset(file), headers = { 'content-type': type, 'cache-control': cache };
+  if (compress && a.gz && gzipOk(req)) { headers['content-encoding'] = 'gzip'; headers.vary = 'Accept-Encoding'; res.writeHead(200, headers); return res.end(a.gz); }
+  res.writeHead(200, headers); return res.end(a.raw);
+}
+function pageBuffer(req, res, type, buf) {
+  const headers = { 'content-type': type, 'cache-control': 'no-store' };
+  if (buf.length > 1024 && gzipOk(req)) { headers['content-encoding'] = 'gzip'; headers.vary = 'Accept-Encoding'; res.writeHead(200, headers); return res.end(zlib.gzipSync(buf, { level: 6 })); }
+  res.writeHead(200, headers); return res.end(buf);
+}
 
 function startDemo(mode, seed) {
   const running = [...games.values()].filter((x) => x.demo && !x.over());
@@ -336,17 +356,22 @@ function startDemo(mode, seed) {
 async function handleView(req, res, url) {
   const p = url.pathname;
   // the city data the demo pages load as map/toronto.js (relative to /view/2d and /view/3d)
-  if (p === '/view/map/toronto.js' || p === '/map/toronto.js') return page(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(PAGES, 'map', 'toronto.js')));
-  if (p === '/live.js' || p === '/traffic.js' || p === '/city-audio.js') return page(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(__dirname, 'viewer', p.slice(1))));
+  if (p === '/view/map/toronto.js' || p === '/map/toronto.js') return pageFile(req, res, 'text/javascript; charset=utf-8', path.join(PAGES, 'map', 'toronto.js'), 'public, max-age=300');
+  if (p === '/live.js' || p === '/traffic.js' || p === '/city-audio.js') return pageFile(req, res, 'text/javascript; charset=utf-8', path.join(__dirname, 'viewer', p.slice(1)), 'public, max-age=300');
+  // vendored three.js and the car model: the 3D page uses relative URLs, so it works both at the repo
+  // root and when served as /view/3d here
+  const vendor = /^\/(?:view\/)?vendor\/(three\.min\.js|OrbitControls\.js|GLTFLoader\.js)$/.exec(p);
+  if (vendor) return pageFile(req, res, 'text/javascript; charset=utf-8', path.join(PAGES, 'vendor', vendor[1]), 'public, max-age=3600');
+  if (p === '/cybercab.glb' || p === '/view/cybercab.glb') return pageFile(req, res, 'model/gltf-binary', path.join(PAGES, 'cybercab.glb'), 'public, max-age=3600', false);
   if (p.startsWith('/audio/')) {
     const manifest = require('./viewer/audio/manifest.json'), name = p.slice('/audio/'.length);
     const allowed = new Set(['manifest.json', ...Object.values(manifest.clips).map(c => c.file)]);
     if (!allowed.has(name)) return page(res, 404, 'text/plain', 'not found');
-    try { return page(res, 200, name === 'manifest.json' ? 'application/json' : 'audio/mpeg', fs.readFileSync(path.join(__dirname, 'viewer', 'audio', name))); }
+    try { return pageFile(req, res, name === 'manifest.json' ? 'application/json' : 'audio/mpeg', path.join(__dirname, 'viewer', 'audio', name), 'public, max-age=3600', name === 'manifest.json'); }
     catch { return page(res, 404, 'text/plain', 'not found'); }
   }
   if (p === '/view/2d' || p === '/view/3d') {
-    try { return page(res, 200, 'text/html; charset=utf-8', patchPage(p === '/view/2d' ? 'index.html' : 'index-3d.html')); } catch (e) { return page(res, 500, 'text/plain', e.message); }
+    try { return pageBuffer(req, res, 'text/html; charset=utf-8', Buffer.from(patchPage(p === '/view/2d' ? 'index.html' : 'index-3d.html'))); } catch (e) { return page(res, 500, 'text/plain', e.message); }
   }
   if (p === '/healthz') return page(res, 200, 'text/plain', 'ok');
   const m = /^\/live\/([\w-]+)\/stream$/.exec(p);
@@ -383,7 +408,7 @@ async function handleView(req, res, url) {
   }
   if (p === '/api/games') return page(res, 200, 'application/json', JSON.stringify([...games.values()].map((g) => ({ ...g.summary(), over: g.over(), watchers: watchers.get(g.id)?.size || 0 }))));
   if (p === '/api/leaderboard') return page(res, 200, 'application/json', JSON.stringify(leaderboard()));
-  if (p === '/' || p === '/leaderboard') return page(res, 200, 'text/html; charset=utf-8', fs.readFileSync(path.join(__dirname, 'viewer', 'index.html'), 'utf8'));
+  if (p === '/' || p === '/leaderboard') return pageFile(req, res, 'text/html; charset=utf-8', path.join(__dirname, 'viewer', 'index.html'), 'no-store');
   page(res, 404, 'text/plain', 'not found');
 }
 
