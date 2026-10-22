@@ -58,6 +58,7 @@ The graph is the largest strongly connected component, so every node can reach e
 {
   version: 1, attribution, bounds,
   water:     [[x0, y0, x1, y1, ...], ...],           // Lake Ontario, harbour slips, the Don (polygons)
+  waterHoles: [[[x0, y0, ...], ...], ...],           // optional islet rings for each water polygon, indexed like water
   land:      [[...], ...],                           // mainland followed by Toronto Islands and other land
   mainlandPolygons: 3,                              // number of generated mainland faces at the start of land
   parks:     [[...], ...],                           // parks, gardens, pitches
@@ -75,5 +76,7 @@ from the previous point. An optional trailing `"m", minHeightM` marks a part tha
 Where OSM maps a tower as `building:part`s, the parts replace the outline.
 
 Draw order that works: lake colour as background, `land` (mainland and the Toronto Islands), `water` (the Don, slips, ponds) on top, `parks`, `rail`, `minor`, graph edges, buildings.
+Water fills must exclude their `waterHoles` (SVG even-odd paths or Three.js Shape holes). The offline repair derives holes only from complete mapped islets strictly inside water boundaries; it does not raise entire islands over their ponds.
 
 Building heights come from OSM `height`, else `building:levels` x 3.2 m, else a default by building type.
+Explicit `building=no` features are excluded. Elevated roof-only features without a metric base height are omitted from building extrusion; their ordinal `layer` does not provide a height in metres. `source/nonbuilding-extrusions.json` records the source tags and exact legacy footprints removed by the offline repair.

@@ -498,7 +498,7 @@ main {
   </main>
 </div>
 
-<script src="map/toronto.js?v=shoreline-2"></script>
+<script src="map/toronto.js?v=shoreline-3"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -1919,7 +1919,7 @@ function torontoLayout() {
     // a rounded footprint keeps its shape; a long thin one is probably a canopy, keep it low
     buildings.push({ pts: P(ring), h, y0, style: styleOf(b[0], b[1], artRand()) });
   }
-  const water = SCENE.water.map((f) => ({ pts: P(flatPts(f)) }));
+  const water = SCENE.water.map((f, i) => ({ pts: P(flatPts(f)), holes: (SCENE.waterHoles?.[i] || []).map((h) => P(flatPts(h))) }));
   const land = SCENE.land.map((f) => ({ pts: P(flatPts(f)) }));
   const parks = SCENE.parks.map((f) => ({ pts: P(flatPts(f)) })).filter((p) => polyArea(p.pts) > 400);
   return { buildings, water: [], rivers: water, land, parks, bridges: [], trees: [], treeDensity: 0.0006, treeSize: 9, floor: 3.2, bay: 4 };
@@ -2161,7 +2161,7 @@ function init3D() {
 
   // buildings, water, parks, trees and sky
   const LAY = torontoLayout(); buildCityArt(LAY);
-  { const mat = waterMaterial(); for (const w of LAY.rivers) { const geo = new THREE.ShapeGeometry(new THREE.Shape(w.pts.map(([x, z]) => new THREE.Vector2(x, -z)))); geo.rotateX(-Math.PI / 2); const m = new THREE.Mesh(geo, mat); m.name = 'inland-water'; m.position.y = 0.18; scene.add(m); } }
+  { const mat = waterMaterial(); for (const w of LAY.rivers) { const shape = new THREE.Shape(w.pts.map(([x, z]) => new THREE.Vector2(x, -z))); for (const hole of w.holes || []) shape.holes.push(new THREE.Path(hole.map(([x, z]) => new THREE.Vector2(x, -z)))); const geo = new THREE.ShapeGeometry(shape); geo.rotateX(-Math.PI / 2); const m = new THREE.Mesh(geo, mat); m.name = 'inland-water'; m.position.y = 0.18; scene.add(m); } }
   drawServiceEdge();
   elevatedDecks();
   streetDetails();

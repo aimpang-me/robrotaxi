@@ -1,7 +1,8 @@
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('fs'), path = require('path'), vm = require('vm');
-const { applyMainland } = require('./mainland');
+const { applyMainland, ringInside } = require('./mainland');
+const { isExtrudedBuilding } = require('./building-tags');
 const graph = require('./toronto.graph.json'), scene = require('./toronto.scene.json');
 
 function contains(x, y, ring) {
@@ -15,7 +16,7 @@ const inLayer = (layer, x, y) => layer.some((ring) => contains(x, y, ring));
 function layersAt(lat, lon) {
   const x = (lon - graph.geo.lon0) * graph.geo.mPerLon / 10;
   const y = (graph.geo.lat0 - lat) * graph.geo.mPerLat / 10;
-  return { land: inLayer(scene.land, x, y), water: inLayer(scene.water, x, y) };
+  return { land: inLayer(scene.land, x, y), water: scene.water.some((ring, i) => contains(x, y, ring) && !inLayer(scene.waterHoles?.[i] || [], x, y)) };
 }
 const dry = (lat, lon) => { const p = layersAt(lat, lon); return p.land && !p.water; };
 for (const [name, lat, lon] of [
@@ -29,6 +30,10 @@ for (const [name, lat, lon] of [
   ['Don River', 43.6578, -79.35425],
 ]) assert(!dry(lat, lon), `${name} must remain water`);
 assert(layersAt(43.6578, -79.35425).water, 'Don River overlay must remain above mainland');
+assert(dry(43.667776, -79.358631), 'Island House must sit on its mapped islet in Sanctuary Pond');
+assert(layersAt(43.66772, -79.35895).water, 'Sanctuary Pond water beside the islet must remain visible');
+assert(scene.waterHoles.some((holes) => holes.length), 'Mapped islets must cut holes in water overlays');
+assert(!ringInside([1, 1, 5, 1, 5, 5, 1, 5], [0, 0, 6, 0, 6, 6, 4, 6, 4, 2, 2, 2, 2, 6, 0, 6]), 'Vertices inside a concave ring are insufficient when an edge crosses its boundary');
 
 let covered = 0, inBounds = 0;
 for (const building of scene.buildings) {
@@ -41,8 +46,14 @@ for (const building of scene.buildings) {
   if (x < 0 || y < 0 || x > scene.bounds.w || y > scene.bounds.h) continue;
   inBounds++;
   if (inLayer(scene.land, x, y)) covered++;
+  assert(!scene.water.some((ring, i) => contains(x, y, ring) && !inLayer(scene.waterHoles?.[i] || [], x, y)), 'Building centroids must not be flooded by water overlays');
 }
-assert(covered / inBounds > 0.999, 'At least 99.9% of in-bounds building centroids must have land beneath them');
+assert.equal(covered, inBounds, 'Every in-bounds building centroid must have land beneath it');
+assert(!isExtrudedBuilding({ building: 'no', amenity: 'ferry_terminal' }), 'A ferry dock must not become a building');
+assert(!isExtrudedBuilding({ building: 'roof', layer: '2' }), 'An elevated roof without a metric base must not become a ground-up box');
+assert(isExtrudedBuilding({ building: 'roof', layer: '2', min_height: '10' }), 'Explicit metric base heights remain supported');
+assert(isExtrudedBuilding({ 'building:part': 'yes' }), 'Building parts remain supported');
+assert(isExtrudedBuilding({ building: 'yes', 'building:part': 'no' }), 'An outline is still a building when it is not a part');
 assert.deepEqual(applyMainland(structuredClone(scene)), scene, 'Offline repair must be idempotent');
 const browser = { window: {} };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'toronto.js'), 'utf8'), browser);

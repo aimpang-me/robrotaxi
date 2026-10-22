@@ -13,6 +13,13 @@ const simulation = (html) => {
 };
 assert(simulation(pages[0]) === simulation(pages[1]), '2D and 3D share identical simulation rules');
 const functionOf = (html, name) => html.match(new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}`))[0];
+{
+  const scene = require('../map/toronto.scene.json');
+  const context = vm.createContext({ SCENE: { ...scene, buildings: [], parks: [] }, W3: (x, y) => [x * 10, y * 10] });
+  vm.runInContext(pages[1].match(/^const flatPts =[^\n]+/m)[0] + '\n' + functionOf(pages[1], 'torontoLayout') + '\nthis.layout = torontoLayout();', context);
+  assert(context.layout.rivers.every((w) => w.pts.every((p) => p.every(Number.isFinite)) && w.holes.every((ring) => ring.every((p) => p.every(Number.isFinite)))), 'water and islet holes project to finite 3D coordinates');
+  assert.equal(context.layout.rivers.reduce((n, w) => n + w.holes.length, 0), scene.waterHoles.flat().length, '3D layout retains every mapped water hole');
+}
 const contexts = pages.map((html) => {
   for (const [, source] of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) new vm.Script(source);
   const context = vm.createContext({ MAPG: graph });

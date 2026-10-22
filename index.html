@@ -513,7 +513,7 @@ main {
   </main>
 </div>
 
-<script src="map/toronto.js?v=shoreline-2"></script>
+<script src="map/toronto.js?v=shoreline-3"></script>
 <script>
 (() => {
 'use strict';
@@ -1513,7 +1513,7 @@ function drawBase() {
   const S0 = SCENE || { land: [], water: [], parks: [], rail: [], minor: [], buildings: [], landmarks: [] };
   el('rect', { x: -2000, y: -2000, width: MAP_W + 4000, height: MAP_H + 4000, class: 'lake' }, g);
   el('path', { class: 'land', d: S0.land.map((f) => flatD(f, true)).join('') }, g);
-  el('path', { class: 'water', d: S0.water.map((f) => flatD(f, true)).join('') }, g);
+  S0.water.forEach((f, i) => el('path', { class: 'water', d: [f, ...(S0.waterHoles?.[i] || [])].map((ring) => flatD(ring, true)).join(''), 'fill-rule': 'evenodd' }, g));
   el('path', { class: 'park', d: S0.parks.map((f) => flatD(f, true)).join('') }, g);
   el('path', { class: 'rail', d: S0.rail.map((f) => flatD(f)).join('') }, g);
   el('path', { class: 'minor', d: S0.minor.filter((m) => m[0] === 0).map((m) => flatD(m.slice(1))).join('') }, g);

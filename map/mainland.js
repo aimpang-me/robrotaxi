@@ -2,6 +2,28 @@
 const fs = require('fs'), path = require('path');
 const crypto = require('crypto');
 const source = require('./source/lake-ontario-shoreline.json');
+const { removeLegacyNonBuildings } = require('./building-tags');
+
+function ringInside(inner, outer) {
+  const points = (ring) => Array.from({ length: ring.length / 2 }, (_, i) => [ring[i * 2], ring[i * 2 + 1]]);
+  const a = points(inner), b = points(outer);
+  const cross = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  const touches = (p, q, r) => Math.abs(cross(p, q, r)) < 1e-8 && r[0] >= Math.min(p[0], q[0]) && r[0] <= Math.max(p[0], q[0]) && r[1] >= Math.min(p[1], q[1]) && r[1] <= Math.max(p[1], q[1]);
+  for (const p of a) {
+    let inside = false;
+    for (let i = 0, j = b.length - 1; i < b.length; j = i++) {
+      if (touches(b[j], b[i], p)) return false;
+      if ((b[i][1] > p[1]) !== (b[j][1] > p[1]) && p[0] < (b[j][0] - b[i][0]) * (p[1] - b[i][1]) / (b[j][1] - b[i][1]) + b[i][0]) inside = !inside;
+    }
+    if (!inside) return false;
+  }
+  for (let i = 0; i < a.length; i++) for (let j = 0; j < b.length; j++) {
+    const p = a[i], q = a[(i + 1) % a.length], r = b[j], s = b[(j + 1) % b.length];
+    if (touches(p, q, r) || touches(p, q, s)) return false;
+    if (cross(p, q, r) * cross(p, q, s) < 0 && cross(r, s, p) * cross(r, s, q) < 0) return false;
+  }
+  return true;
+}
 
 function mainlandPolygons(bounds) {
   const { s, w, n } = source.bbox, lat = (n + s) / 2 * Math.PI / 180;
@@ -78,15 +100,17 @@ function mainlandPolygons(bounds) {
 }
 
 function applyMainland(scene) {
+  removeLegacyNonBuildings(scene);
   const mainland = mainlandPolygons(scene.bounds);
   scene.land = mainland.concat(scene.land.slice(scene.mainlandPolygons || 0));
   scene.mainlandPolygons = mainland.length;
   const invalid = new Set(source.legacyOpenWaterPolygons.map((p) => p.sha256));
   scene.water = scene.water.filter((ring) => !invalid.has(crypto.createHash('sha256').update(JSON.stringify(ring)).digest('hex')));
+  scene.waterHoles = scene.water.map((outer) => scene.land.slice(scene.mainlandPolygons).filter((inner) => ringInside(inner, outer)));
   return scene;
 }
 
-module.exports = { mainlandPolygons, applyMainland };
+module.exports = { mainlandPolygons, applyMainland, ringInside };
 
 if (require.main === module) {
   const scenePath = path.join(__dirname, 'toronto.scene.json');

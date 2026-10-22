@@ -6,6 +6,7 @@
 'use strict';
 const fs = require('fs'), path = require('path'), zlib = require('zlib');
 const { applyMainland } = require('./mainland');
+const { isExtrudedBuilding } = require('./building-tags');
 const OSM = process.argv[2] || path.join(__dirname, 'osm');
 const OUT = __dirname;
 const ATTRIBUTION = '© OpenStreetMap contributors, ODbL 1.0';
@@ -381,6 +382,7 @@ const minH = (t) => parseFloat(t.min_height || '') || (parseFloat(t['building:mi
 const outlines = [], parts = [];
 for (const el of buildingsRaw) {
   const t = el.tags || {};
+  if (!isExtrudedBuilding(t)) continue;
   if (t.building === 'construction' && !t.height) continue;
   if (t.location === 'underground' || t.layer && +t.layer < 0) continue;
   const isPart = !!t['building:part'] && !t.building;
