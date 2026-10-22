@@ -24,7 +24,7 @@ function fixture(real = false, map = graph) {
         Object.assign(car, carPos(car)); S.cars.push(car); return car;
       },
       move(dt = .5) { S.t += dt; advanceRoadTraffic(dt); },
-      body: roadBody, clone: cloneWorld, setRoute,
+      body: roadBody, clone: cloneWorld, setRoute, plan: planFrom,
       init(seed) { initTraffic(S, seed); },
       streams() { seedStreams(1234); const before = [rD(), rH(), rC()]; initTraffic(S, 1234); return [before, [rD(), rH(), rC()]]; },
       streamsOnly() { seedStreams(1234); return [[rD(), rH(), rC()], [rD(), rH(), rC()]]; },
@@ -74,6 +74,25 @@ test('a parked taxi waits for a safe gap before entering moving traffic', () => 
   assert(lead.prog > .1, 'the existing traffic can clear the entry');
   for (let i = 0; i < 20; i++) { f.move(); assertBodies(f); }
   assert(taxi.roadDistance > 2, 'the taxi joins after clearance');
+});
+
+test('a blocked departure discovers and reroutes before admission to the final lane', () => {
+  const map = json(graph); map.edges.push([0, 5, 0, 50, 0, []]);
+  const f = fixture(false, map);
+  f.world.agent = true; f.world.periods.agent = { ...f.world.periods.exec };
+  const lead = f.add('T-02', [0, 5, 1, 6], .4, { state: 'stranded', strandUntil: Infinity });
+  const taxi = f.add('T-01', [0, 1, 6], 0, { roadActive: false });
+  f.incident(0);
+  for (let i = 0; i < 20; i++) { f.move(); assertBodies(f); }
+  assert.equal(taxi.path[1], 5);
+  assert.equal(taxi.roadActive, false); assert.equal(taxi.prog, 0);
+  assert.equal(lead.prog, .4);
+});
+
+test('rerouting preserves the exit already occupied by a vehicle front', () => {
+  const f = fixture(), car = f.add('T-01', [0, 1, 2, 3, 4], 9.99, { length: 1.1 });
+  const plan = f.plan(car, 6);
+  assert.deepEqual(json(plan.path.slice(0, 4)), [0, 1, 2, 3]);
 });
 
 test('opposing lanes pass independently', () => {

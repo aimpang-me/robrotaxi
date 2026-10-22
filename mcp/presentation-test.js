@@ -6,6 +6,12 @@ const vm = require('node:vm');
 const root = path.join(__dirname, '..');
 const graph = require('../map/toronto.graph.json');
 const pages = ['index.html', 'index-3d.html'].map((file) => fs.readFileSync(path.join(root, file), 'utf8'));
+const simulation = (html) => {
+  const start = html.indexOf('/* ---------------- seeded random'), step = html.indexOf('function step(dt) {'), end = html.indexOf('\n}\n', step);
+  assert(start >= 0 && step > start && end > step, 'simulation boundaries exist');
+  return html.slice(start, end + 3);
+};
+assert(simulation(pages[0]) === simulation(pages[1]), '2D and 3D share identical simulation rules');
 const functionOf = (html, name) => html.match(new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}`))[0];
 const contexts = pages.map((html) => {
   for (const [, source] of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) new vm.Script(source);
