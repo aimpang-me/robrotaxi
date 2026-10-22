@@ -1,0 +1,281 @@
+{
+  "simulation": "7e16aa4",
+  "coreSha256": "93bd68d62d8c8b7985beb61c6b9784d2de3f07d4970ab7350d6b4115f3f5cf10",
+  "demand": 2,
+  "seeds": [
+    1101,
+    2207,
+    3313,
+    4421,
+    5531
+  ],
+  "policies": [
+    "executor",
+    "scripted",
+    "lazy",
+    "greedy"
+  ],
+  "source": "node bench.js; ROBRO_BENCH_JOBS=16; final physical traffic and terminal-branch circulation; bots and economy unchanged.",
+  "results": [
+    {
+      "policy": "greedy",
+      "seed": 1101,
+      "summary": {
+        "finished": true,
+        "finishMin": 711.6,
+        "revenue": 1000249,
+        "elapsedMin": 711.6,
+        "trips": 611,
+        "cancelled": 139,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "scripted",
+      "seed": 5531,
+      "summary": {
+        "finished": true,
+        "finishMin": 841.7,
+        "revenue": 1000991,
+        "elapsedMin": 841.7,
+        "trips": 586,
+        "cancelled": 71,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "executor",
+      "seed": 5531,
+      "summary": {
+        "finished": true,
+        "finishMin": 1048,
+        "revenue": 1001377,
+        "elapsedMin": 1048,
+        "trips": 642,
+        "cancelled": 191,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "scripted",
+      "seed": 1101,
+      "summary": {
+        "finished": true,
+        "finishMin": 844.1,
+        "revenue": 1000062,
+        "elapsedMin": 844.1,
+        "trips": 647,
+        "cancelled": 244,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "lazy",
+      "seed": 5531,
+      "summary": {
+        "finished": true,
+        "finishMin": 1162.1,
+        "revenue": 1001553,
+        "elapsedMin": 1162.1,
+        "trips": 676,
+        "cancelled": 280,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "executor",
+      "seed": 1101,
+      "summary": {
+        "finished": true,
+        "finishMin": 1190.9,
+        "revenue": 1000144,
+        "elapsedMin": 1190.9,
+        "trips": 724,
+        "cancelled": 504,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "scripted",
+      "seed": 4421,
+      "summary": {
+        "finished": true,
+        "finishMin": 848.4,
+        "revenue": 1000759,
+        "elapsedMin": 848.4,
+        "trips": 664,
+        "cancelled": 512,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "lazy",
+      "seed": 1101,
+      "summary": {
+        "finished": true,
+        "finishMin": 1326.1,
+        "revenue": 1000189,
+        "elapsedMin": 1326.1,
+        "trips": 738,
+        "cancelled": 651,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "scripted",
+      "seed": 2207,
+      "summary": {
+        "finished": true,
+        "finishMin": 847.4,
+        "revenue": 1000316,
+        "elapsedMin": 847.4,
+        "trips": 662,
+        "cancelled": 519,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "scripted",
+      "seed": 3313,
+      "summary": {
+        "finished": true,
+        "finishMin": 829.4,
+        "revenue": 1000629,
+        "elapsedMin": 829.4,
+        "trips": 674,
+        "cancelled": 669,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "executor",
+      "seed": 4421,
+      "summary": {
+        "finished": true,
+        "finishMin": 1384.4,
+        "revenue": 1000238,
+        "elapsedMin": 1384.4,
+        "trips": 792,
+        "cancelled": 1092,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "executor",
+      "seed": 2207,
+      "summary": {
+        "finished": false,
+        "finishMin": null,
+        "revenue": 972116,
+        "elapsedMin": 1440,
+        "trips": 784,
+        "cancelled": 1254,
+        "stranded": 1
+      }
+    },
+    {
+      "policy": "lazy",
+      "seed": 4421,
+      "summary": {
+        "finished": false,
+        "finishMin": null,
+        "revenue": 899418,
+        "elapsedMin": 1440,
+        "trips": 709,
+        "cancelled": 1258,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "lazy",
+      "seed": 2207,
+      "summary": {
+        "finished": false,
+        "finishMin": null,
+        "revenue": 796200,
+        "elapsedMin": 1440,
+        "trips": 650,
+        "cancelled": 1389,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "lazy",
+      "seed": 3313,
+      "summary": {
+        "finished": false,
+        "finishMin": null,
+        "revenue": 788571,
+        "elapsedMin": 1440,
+        "trips": 658,
+        "cancelled": 1751,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "executor",
+      "seed": 3313,
+      "summary": {
+        "finished": false,
+        "finishMin": null,
+        "revenue": 928621,
+        "elapsedMin": 1440,
+        "trips": 762,
+        "cancelled": 1646,
+        "stranded": 1
+      }
+    },
+    {
+      "policy": "greedy",
+      "seed": 2207,
+      "summary": {
+        "finished": true,
+        "finishMin": 678.9,
+        "revenue": 1001578,
+        "elapsedMin": 678.9,
+        "trips": 608,
+        "cancelled": 340,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "greedy",
+      "seed": 3313,
+      "summary": {
+        "finished": true,
+        "finishMin": 668.1,
+        "revenue": 1001169,
+        "elapsedMin": 668.1,
+        "trips": 626,
+        "cancelled": 443,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "greedy",
+      "seed": 4421,
+      "summary": {
+        "finished": true,
+        "finishMin": 679.2,
+        "revenue": 1001455,
+        "elapsedMin": 679.2,
+        "trips": 608,
+        "cancelled": 341,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "greedy",
+      "seed": 5531,
+      "summary": {
+        "finished": true,
+        "finishMin": 783.6,
+        "revenue": 1001169,
+        "elapsedMin": 783.6,
+        "trips": 571,
+        "cancelled": 39,
+        "stranded": 0
+      }
+    }
+  ]
+}

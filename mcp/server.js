@@ -13,6 +13,7 @@ const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio
 const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
 const { Game, RANKED_SEEDS, leaderboard } = require('./game');
 const store = require('./store');
+const { createViewerStreams } = require('./viewer-stream');
 
 // In a container, hosted volumes mount as root. Started as root with ROBRO_RUN_AS_UID set, hand the data folders to that user and drop root.
 if (process.env.ROBRO_RUN_AS_UID && process.getuid && process.getuid() === 0) {
@@ -48,7 +49,8 @@ const say = (...a) => console.error('[robrotaxi]', ...a); // stdout belongs to t
 const games = new Map();
 const liveGames = () => [...games.values()].filter((g) => !g.over()).length;
 const clean = (x, n) => String(x).replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, n);
-const watchers = new Map(); // game id -> Set of SSE responses
+const watchers = new Map(); // game id -> viewer hub
+const viewerStreams = createViewerStreams(watchers, LIM.watchers);
 // watch links: 3D by default; base is the public address the client used (or ROBRO_PUBLIC_URL), else localhost
 const viewUrl = (g, base, view = '3d') => { const b = process.env.ROBRO_PUBLIC_URL || base || (VIEW_PORT ? `http://localhost:${VIEW_PORT}` : null); return b ? `${b.replace(/\/$/, '')}/view/${view}?game=${g.id}` : null; };
 function baseFrom(req) {
@@ -238,11 +240,13 @@ function makeServer(base) {
 function patchPage(file) {
   let html = fs.readFileSync(path.join(PAGES, file), 'utf8').replace(/\r\n/g, '\n'); // a Windows checkout may have CRLF
   const rep = (a, b) => { if (!html.includes(a)) throw new Error(`${file} changed: cannot find "${a.slice(0, 40)}"`); html = html.replace(a, b); };
+  rep('<head>', '<head><script>window.__robroLive = true;</script>');
   rep('function step(dt) {', 'function step(dt) {\n  if (window.__robroLive) return;');
-  rep('window.__robro = {', 'window.__robroLiveHooks = { main: () => MAIN, shadow: () => SHADOW, setShadow: (w) => { SHADOW = w; }, cloneWorld, nodes, edges, E, edgeAt, BASE, DEPOTS, recomputeTraffic, log, setAgentUI,\n  // the 3D scene graph, for modules that add to it (null on the 2D page)\n  get scene() { return typeof scene === "undefined" ? null : scene; }, get W3() { return typeof W3 === "undefined" ? null : W3; } };\nwindow.__robro = {');
+  rep('window.__robro = {', 'window.__robroLiveHooks = { main: () => MAIN, shadow: () => SHADOW, setShadow: (w) => { SHADOW = w; }, setSeed: (n) => { SEED = n; }, cloneWorld, nodes, edges, E, edgeAt, BASE, DEPOTS, recomputeTraffic, log, setAgentUI,\n  // the 3D scene graph, for modules that add to it (null on the 2D page)\n  get scene() { return typeof scene === "undefined" ? null : scene; }, get W3() { return typeof W3 === "undefined" ? null : W3; } };\nwindow.__robro = {');
   // live.js eases each car between server updates and rounds corners; it hands the page a finished pose
   rep('function carPos(c) {', 'function carPos(c) {\n  if (c.livePos) return c.livePos;');
-  return html + '\n<script src="/live.js"></script>\n<script src="/traffic.js"></script>\n';
+  rep('<script src="mcp/viewer/city-audio.js"></script>', '<script src="/city-audio.js"></script>');
+  return html.replace('<script src="mcp/viewer/traffic.js"></script>', '<script src="/live.js"></script><script src="/traffic.js"></script>');
 }
 const page = (res, code, type, body) => { res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store' }); res.end(body); };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -269,7 +273,14 @@ function handleView(req, res, url) {
   const p = url.pathname;
   // the city data the demo pages load as map/toronto.js (relative to /view/2d and /view/3d)
   if (p === '/view/map/toronto.js' || p === '/map/toronto.js') return page(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(PAGES, 'map', 'toronto.js')));
-  if (p === '/live.js' || p === '/traffic.js') return page(res, 200, 'text/javascript', fs.readFileSync(path.join(__dirname, 'viewer', p.slice(1))));
+  if (p === '/live.js' || p === '/traffic.js' || p === '/city-audio.js') return page(res, 200, 'text/javascript; charset=utf-8', fs.readFileSync(path.join(__dirname, 'viewer', p.slice(1))));
+  if (p.startsWith('/audio/')) {
+    const manifest = require('./viewer/audio/manifest.json'), name = p.slice('/audio/'.length);
+    const allowed = new Set(['manifest.json', ...Object.values(manifest.clips).map(c => c.file)]);
+    if (!allowed.has(name)) return page(res, 404, 'text/plain', 'not found');
+    try { return page(res, 200, name === 'manifest.json' ? 'application/json' : 'audio/mpeg', fs.readFileSync(path.join(__dirname, 'viewer', 'audio', name))); }
+    catch { return page(res, 404, 'text/plain', 'not found'); }
+  }
   if (p === '/view/2d' || p === '/view/3d') {
     try { return page(res, 200, 'text/html; charset=utf-8', patchPage(p === '/view/2d' ? 'index.html' : 'index-3d.html')); } catch (e) { return page(res, 500, 'text/plain', e.message); }
   }
@@ -277,17 +288,7 @@ function handleView(req, res, url) {
   const m = /^\/live\/([\w-]+)\/stream$/.exec(p);
   if (m) {
     const g = games.get(m[1]); if (!g) return page(res, 404, 'text/plain', 'no such game');
-    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive', 'access-control-allow-origin': '*' });
-    let evFrom = 0;
-    const meta = { id: g.id, player: g.player, model: g.model, seed: g.seed, ranked: g.ranked, mode: g.mode };
-    const send = () => { const snap = g.live(evFrom); evFrom = snap.evTo; res.write(`data: ${JSON.stringify({ meta, snap, ctl: g.ctl })}\n\n`); };
-    if (!watchers.has(g.id)) watchers.set(g.id, new Set());
-    const total = [...watchers.values()].reduce((n, x) => n + x.size, 0);
-    if (total >= LIM.watchers) { res.write('event: full\ndata: {}\n\n'); return res.end(); }
-    const set = watchers.get(g.id); set.add(res); g.listeners.add(send); send();
-    const ka = setInterval(() => res.write(': ka\n\n'), 15000);
-    req.on('close', () => { set.delete(res); g.listeners.delete(send); clearInterval(ka); });
-    return;
+    return viewerStreams.subscribe(g, req, res);
   }
   const c = /^\/live\/([\w-]+)\/ctl$/.exec(p);
   if (c) { // viewer playback: pacing only. The sim is stepped identically at any speed, so scores do not change.

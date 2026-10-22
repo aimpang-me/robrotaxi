@@ -126,13 +126,12 @@ function options(riderId, limit = 4) {
     if (!usableCar(c) || c === r.car) continue;
     let path, lead = { t: 0, pct: 0 }; const chained = c.state === 'riding';
     if (chained) { lead = remaining(c); path = pathTo(tree, targetOf(c)); }
-    else if (c.prog > 0) { const p = pathTo(tree, c.path[c.seg + 1]); path = p && [c.path[c.seg], ...p]; }
-    else path = pathTo(tree, c.path[c.seg]);
+    else path = routeFrom(c, node => pathTo(tree, node))?.path;
     if (!path) continue;
     const a = pathStats(path, chained ? 0 : c.prog);
     const pickT = a.t + lead.t + (c.state === 'charging' || c.state === 'tocharge' ? 0 : 0);
     const startBat = c.battery - lead.pct, left = startBat - a.pct - trip.pct;
-    cands.push({ car: c.id, state: c.state, pickupMin: r1(pickT / 60), emptyKm: r1(a.px / 100), batteryNow: r1(c.battery), batteryAtDropoff: r1(left), canReachChargerAfter: left - backPct >= 0, safe: left - backPct >= RESERVE });
+    cands.push({ car: c.id, state: c.state, pickupMin: r1(pickT / 60), emptyKm: r1(a.px / 100), batteryNow: r1(c.battery), batteryAtDropoff: r1(left), canReachChargerAfter: !!bestDepotByTime(r.to, left), safe: !!after && left - backPct >= RESERVE });
   }
   cands.sort((x, y) => x.pickupMin - y.pickupMin);
   const wNow = S.t - r.t0;
@@ -142,9 +141,7 @@ function options(riderId, limit = 4) {
 /* ---------- actions (the model's levers) ---------- */
 function say(kind, tag, head, reason) { EVENTS.push({ t: S.t, src: 'agent', kind, tag, head, body: reason || undefined, model: true }); }
 function freeUp(c) {
-  // stop a car where it is: finish the current block if mid-road
-  if (c.prog > 0) { c.path = [c.path[c.seg], c.path[c.seg + 1]]; c.seg = 0; c.state = 'reposition'; } else { c.path = [carNode(c)]; c.seg = 0; c.prog = 0; c.state = 'idle'; }
-  c.routeVer++;
+  stopAfterBlock(c);
 }
 function unassign(r) {
   if (!r.car) return;
@@ -183,7 +180,7 @@ function actCharge(carId, depot, chargeTo = 90, reason) {
   if (c.next) unassign(c.next);
   if (c.job) unassign(c.job);
   let d = depotBy(depot), drive;
-  if (!d) { const b = bestDepotByTime(carNode(c), c.battery); if (!b) throw new Error(`${c.id} cannot reach a depot on ${r1(c.battery)}% by any known route.`); d = b.d; drive = b.st; }
+  if (!d) { const b = bestDepotFor(c); if (!b) throw new Error(`${c.id} cannot reach a depot on ${r1(c.battery)}% by any known route.`); d = b.d; drive = b.st; }
   c.depot = d; c.chargeTo = Math.max(10, Math.min(100, +chargeTo || 90));
   if (!sendTo(c, d.node, 'tocharge')) throw new Error(`No known route to ${d.name} right now; the car will retry in 30 s.`);
   if (c.path.length === 1) arrive(c);
@@ -248,9 +245,10 @@ function advance(maxS, stopOnEvent, minS = 20, why = []) {
 /* ---------- live view snapshot (for the browser pages) ---------- */
 function liveSnap(evFrom) {
   const reqOut = (r) => ({ ...r, car: r.car ? r.car.id : null });
-  const carOut = (c) => ({ id: c.id, path: c.path, seg: c.seg, prog: c.prog, x: c.x, y: c.y, state: c.state, battery: c.battery, job: c.job ? c.job.id : null, next: c.next ? c.next.id : null, depot: c.depot ? c.depot.name : null, chargeTo: c.chargeTo, plugged: !!c.plugged, queueT: c.queueT, holdUntil: c.holdUntil, strandUntil: c.strandUntil, routeVer: c.routeVer, known: [...c.known] });
+  const carOut = (c) => ({ id: c.id, roadActive: c.roadActive, path: c.path, seg: c.seg, prog: c.prog, x: c.x, y: c.y, speed: c.speed, state: c.state, battery: c.battery, job: c.job ? c.job.id : null, next: c.next ? c.next.id : null, depot: c.depot ? c.depot.name : null, chargeTo: c.chargeTo, plugged: !!c.plugged, queueT: c.queueT, holdUntil: c.holdUntil, strandUntil: c.strandUntil, routeVer: c.routeVer, known: [...c.known] });
   return {
     t: S.t, seed: SEED, rph: Math.round(S.rph * DEMAND), agent: S.agent, agentSince: S.agentSince, connectT: S.connectT, hazIdx: S.hazIdx, rush: S.rush,
+    traffic: { vehicles: S.traffic.vehicles.map(({ id, model, color, length, path, seg, prog, speed, x, y, ang, routeVer }) => ({ id, model, color, length, path: [...path], seg, prog, speed, x, y, ang, routeVer })) },
     cars: S.cars.map(carOut), reqs: S.reqs.map(reqOut), incidents: S.incidents.map((i) => ({ id: i.id, type: i.type, edge: i.edge.id, until: i.until, seen: i.seen, seenBy: i.seenBy, src: i.src })),
     periods: S.periods, waitSeries: S.waitSeries.slice(-120),
     shadow: SHADOW ? { periods: SHADOW.periods, cars: SHADOW.cars.map(carOut), reqs: SHADOW.reqs.map(reqOut), waitSeries: SHADOW.waitSeries.slice(-120) } : null,

@@ -5,6 +5,8 @@
 // Usage: node map/build.js [osm-dir]
 'use strict';
 const fs = require('fs'), path = require('path'), zlib = require('zlib');
+const { applyMainland } = require('./mainland');
+const { isExtrudedBuilding } = require('./building-tags');
 const OSM = process.argv[2] || path.join(__dirname, 'osm');
 const OUT = __dirname;
 const ATTRIBUTION = '© OpenStreetMap contributors, ODbL 1.0';
@@ -359,6 +361,7 @@ for (const el of landRaw) {
   if (!isWater && !isLand && !isPark) continue;
   for (const ring of polysOf(el)) {
     if (ring.length < 4) continue;
+    if (isWater && (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1])) continue;
     const a = Math.abs(area(ring)) * U * U; if (a < 150) continue;
     const c = centroid(ring); if (c[0] < -50 || c[1] < -50 || c[0] > BOUNDS.w + 50 || c[1] > BOUNDS.h + 50) continue;
     (isWater ? waterPolys : isLand ? landPolys : parkPolys).push(ring);
@@ -379,6 +382,7 @@ const minH = (t) => parseFloat(t.min_height || '') || (parseFloat(t['building:mi
 const outlines = [], parts = [];
 for (const el of buildingsRaw) {
   const t = el.tags || {};
+  if (!isExtrudedBuilding(t)) continue;
   if (t.building === 'construction' && !t.height) continue;
   if (t.location === 'underground' || t.layer && +t.layer < 0) continue;
   const isPart = !!t['building:part'] && !t.building;
@@ -459,6 +463,7 @@ const scene = {
   buildingsEncoding: 'each building: [heightM, type, x0, y0, dx1, dy1, ...]: footprint in integer metres from the map origin, first point absolute then deltas; optional trailing "m", minHeightM. type: 0 other, 1 house, 2 apartments, 3 office/retail/hotel, 4 civic/church/school, 5 industrial/parking, 6 glass',
   buildings, landmarks,
 };
+applyMainland(scene);
 const j = (o) => JSON.stringify(o);
 fs.writeFileSync(path.join(OUT, 'toronto.graph.json'), j(graph));
 fs.writeFileSync(path.join(OUT, 'toronto.scene.json'), j(scene));

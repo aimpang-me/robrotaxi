@@ -11,6 +11,14 @@ The city is downtown Toronto from OpenStreetMap (© OpenStreetMap contributors, 
 `map/toronto.js` is the same data as a script for the pages: it sets `window.ROBRO_MAP = { graph, scene }`.
 Regenerate everything with `node map/build.js` (and `node map/fetch-osm.js` first, where OSM is reachable).
 
+The mainland comes from the outer shoreline of [OpenStreetMap Lake Ontario relation 1206310](https://www.openstreetmap.org/relation/1206310), which is tagged `natural=water`, not `natural=coastline`.
+`map/source/lake-ontario-shoreline.json` retains only the outer-member geometry returned around the scene bounds, split at missing coordinates, with attribution, retrieval time and the OSM data timestamp.
+`map/mainland.js` clips these directed shores to the scene bounds and traces their faces with the bounding rectangle. The lake is on the right of each directed shore. Faces on the opposite side become land, preserving harbour slips and boundary inlets.
+The first `scene.mainlandPolygons` entries in `land` are these generated mainland faces. The remaining entries retain the existing islands.
+
+Run `node map/mainland.js` to repair the committed scene and browser data without the raw extract or any road-graph changes. The repair also removes the seven historical Lake Ontario member ways that were incorrectly drawn as closed water polygons. Their exact polygon fingerprints and OSM way IDs are recorded in the source snapshot, so unrelated water polygons are retained. The full builder now rejects open water rings.
+Run `node map/mainland-test.js` to check mainland building coverage, dry landmarks, harbour water, slips, the Don, artifact consistency and repair idempotence.
+
 ## Coordinates
 
 - Sim units, same as before: **1 unit = 10 m**. `x` grows east, `y` grows south (screen space), origin at the north-west corner of `bounds`.
@@ -50,7 +58,9 @@ The graph is the largest strongly connected component, so every node can reach e
 {
   version: 1, attribution, bounds,
   water:     [[x0, y0, x1, y1, ...], ...],           // Lake Ontario, harbour slips, the Don (polygons)
-  land:      [[...], ...],                           // Toronto Islands and other land drawn over the lake
+  waterHoles: [[[x0, y0, ...], ...], ...],           // optional islet rings for each water polygon, indexed like water
+  land:      [[...], ...],                           // mainland followed by Toronto Islands and other land
+  mainlandPolygons: 3,                              // number of generated mainland faces at the start of land
   parks:     [[...], ...],                           // parks, gardens, pitches
   rail:      [[...], ...],                           // rail corridor centrelines (polylines)
   buildings: [[h, type, x0, y0, dx1, dy1, ...], ...], // height in metres, style type, footprint (see below)
@@ -66,5 +76,7 @@ from the previous point. An optional trailing `"m", minHeightM` marks a part tha
 Where OSM maps a tower as `building:part`s, the parts replace the outline.
 
 Draw order that works: lake colour as background, `land` (mainland and the Toronto Islands), `water` (the Don, slips, ponds) on top, `parks`, `rail`, `minor`, graph edges, buildings.
+Water fills must exclude their `waterHoles` (SVG even-odd paths or Three.js Shape holes). The offline repair derives holes only from complete mapped islets strictly inside water boundaries; it does not raise entire islands over their ponds.
 
 Building heights come from OSM `height`, else `building:levels` x 3.2 m, else a default by building type.
+Explicit `building=no` features are excluded. Elevated roof-only features without a metric base height are omitted from building extrusion; their ordinal `layer` does not provide a height in metres. `source/nonbuilding-extrusions.json` records the source tags and exact legacy footprints removed by the offline repair.

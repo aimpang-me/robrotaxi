@@ -1,0 +1,95 @@
+{
+  "attribution": "OpenStreetMap contributors, ODbL 1.0",
+  "source": "https://api.openstreetmap.org/api/0.6/relation/13540427/full.json",
+  "relation": {
+    "id": 13540427,
+    "version": 3,
+    "timestamp": "2025-08-03T16:07:10Z",
+    "tags": {
+      "intermittent": "no",
+      "name": "Sanctuary Pond",
+      "natural": "water",
+      "salt": "no",
+      "source": "CanVec 6.0 - NRCan",
+      "type": "multipolygon",
+      "water": "pond"
+    },
+    "members": [
+      {
+        "type": "way",
+        "ref": 82576084,
+        "role": "outer"
+      },
+      {
+        "type": "way",
+        "ref": 1011335776,
+        "role": "inner"
+      }
+    ]
+  },
+  "islet": {
+    "id": 1011335776,
+    "tags": {
+      "place": "islet"
+    },
+    "geometry": [
+      [
+        -79.358684,
+        43.6678445
+      ],
+      [
+        -79.3586126,
+        43.6678389
+      ],
+      [
+        -79.3585602,
+        43.6678225
+      ],
+      [
+        -79.3585162,
+        43.6677759
+      ],
+      [
+        -79.3585191,
+        43.6677251
+      ],
+      [
+        -79.3585609,
+        43.6676923
+      ],
+      [
+        -79.3586282,
+        43.6676836
+      ],
+      [
+        -79.3588827,
+        43.667699
+      ],
+      [
+        -79.3588848,
+        43.6677513
+      ],
+      [
+        -79.358787,
+        43.6677954
+      ],
+      [
+        -79.3587657,
+        43.667812
+      ],
+      [
+        -79.3587544,
+        43.6678327
+      ],
+      [
+        -79.3587331,
+        43.6678389
+      ],
+      [
+        -79.358684,
+        43.6678445
+      ]
+    ],
+    "legacyLandSha256": "e3bb31402b897c86aa4b4c4a4ff4f8c1747f74f535cf3c398da9c3a8cdad303d"
+  }
+}

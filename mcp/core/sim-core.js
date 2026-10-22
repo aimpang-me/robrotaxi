@@ -86,9 +86,6 @@ edges.forEach((e) => {
   e.mx = m.x; e.my = m.y;
   e.rushy = e.motorway || DISTRICTS.some((d) => d.w >= 1.5 && Math.hypot(m.x - d.x, m.y - d.y) < 65);
 });
-// Background traffic. Other vehicles are not simulated one by one: each road has a share of the day's load (heavier on
-// bigger roads near the busy districts) and the load follows the time of day, so every car on it slows. The views draw
-// vehicles from the same numbers (mcp/viewer/traffic.js), so a slow road always has a visible reason.
 const DIST_PEAK = Math.max(...nodes.map((n) => DISTRICTS.reduce((s, d) => s + d.w * Math.exp(-((n.x - d.x) ** 2 + (n.y - d.y) ** 2) / (2 * 110 * 110)), 0)));
 edges.forEach((e) => {
   const g = DISTRICTS.reduce((s, d) => s + d.w * Math.exp(-((e.mx - d.x) ** 2 + (e.my - d.y) ** 2) / (2 * 110 * 110)), 0) / DIST_PEAK;
@@ -118,8 +115,11 @@ const MIN_TRIP = 120;      // riders don't hail for less than about 1.2 km as th
 /* ---------------- routing ---------------- */
 // the agent plans on what the fleet has seen (kBlocked/kTraffic); cars drive on the real road (blocked/traffic)
 const timeW = (e) => e.kBlocked ? Infinity : e.len / (BASE * e.spd / e.kTraffic);
+const timeRoutes = new Map();
 // binary-heap Dijkstra; `rev` walks edges backwards (shortest paths INTO the source)
 function heapSearch(from, to, w, rev) {
+  const key = from + "," + to + "," + !!rev;
+  if (w === timeW && timeRoutes.has(key)) return timeRoutes.get(key);
   const N = nodes.length, dist = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), done = new Uint8Array(N);
   const hk = [], hv = [];
   const push = (k, v) => { let i = hk.length; hk.push(k); hv.push(v); while (i > 0) { const p = (i - 1) >> 1; if (hk[p] <= k) break; hk[i] = hk[p]; hv[i] = hv[p]; i = p; } hk[i] = k; hv[i] = v; };
@@ -134,7 +134,12 @@ function heapSearch(from, to, w, rev) {
       const nd = dist[u] + c; if (nd < dist[v]) { dist[v] = nd; prev[v] = u; push(nd, v); }
     }
   }
-  return { dist, prev };
+  const result = { dist, prev };
+  if (w === timeW) {
+    if (timeRoutes.size >= 512) timeRoutes.clear();
+    timeRoutes.set(key, result);
+  }
+  return result;
 }
 function dijkstra(from, to, w) {
   if (from === to) return { path: [from], cost: 0 };
@@ -181,7 +186,9 @@ function initCars() {
     const n = usable[Math.floor(rC() * usable.length)];
     Object.assign(c, { path: [n], seg: 0, prog: 0, x: nodes[n].x, y: nodes[n].y, ang: 0, battery: c.i === low ? 12 + rC() * 10 : 30 + rC() * 65, state: 'idle', job: null, next: null, depot: null, chargeTo: 0, holdUntil: 0, holdEdge: null, lastLowLog: 0 });
     c.known.clear(); c.routeVer++;
+    c.roadActive = false; c.roadTrail = []; c.roadDistance = 0; c.waitSince = null; c.speed = 0;
   }
+  initTraffic(S, SEED);
 }
 function makeHazards() {
   // any real block can see a crash or a jam, longer roads more often; not the depot driveways
@@ -204,9 +211,9 @@ const isFree = (c) => c.state === 'idle' || c.state === 'reposition';
 function cloneWorld(W) {
   const reqMap = new Map();
   const reqs = W.reqs.map((r) => { const c = { ...r, car: null, mine: false }; reqMap.set(r, c); return c; });
-  const cars = W.cars.map((c) => ({ ...c, path: [...c.path], known: new Set(c.known), job: c.job ? reqMap.get(c.job) : null, next: null }));
+  const cars = W.cars.map((c) => ({ ...c, path: [...c.path], roadTrail: (c.roadTrail || []).map((p) => ({ ...p })), known: new Set(c.known), job: c.job ? reqMap.get(c.job) : null, next: null }));
   cars.forEach((c) => { if (c.job) c.job.car = c; });
-  return { ...W, shadow: true, agent: false, cars, reqs, timers: { ...W.timers }, periods: { exec: newPeriod(W.t), agent: null }, waitSeries: [], selected: null };
+  return { ...W, shadow: true, agent: false, cars, reqs, traffic: JSON.parse(JSON.stringify(W.traffic)), timers: { ...W.timers }, periods: { exec: newPeriod(W.t), agent: null }, waitSeries: [], selected: null };
 }
 
 /* ---------------- feed ---------------- */
@@ -219,20 +226,30 @@ function weightFor(car) {
   if (S.agent) return timeW;
   return (e) => (car.known.has(e.id) ? Infinity : e.len); // executor alone: shortest road, no live incident feed
 }
-function planFrom(car, to, w = weightFor(car)) {
-  if (car.prog > 0) {
-    const cur = car.path[car.seg], nxt = car.path[car.seg + 1];
-    const r = dijkstra(nxt, to, w); if (!r) return null;
-    return { path: [cur, ...r.path], seg: 0, prog: car.prog };
+function committedRouteStart(car) {
+  if (car.prog > 0 || car.roadActive !== false && car.seg < car.path.length - 1) {
+    let end = car.seg + 1, front = roadLength(car) / 2 - (E(car.path[car.seg], car.path[end]).len - car.prog);
+    while (front > 0 && end < car.path.length - 1) { front -= E(car.path[end], car.path[end + 1]).len; end++; }
+    return { prefix: car.path.slice(car.seg, end), node: car.path[end], prog: car.prog };
   }
-  const r = dijkstra(car.path[car.seg], to, w); if (!r) return null;
-  return { path: r.path, seg: 0, prog: 0 };
+  return { prefix: [], node: car.path[car.seg], prog: 0 };
+}
+function routeFrom(car, suffixFrom) {
+  const start = committedRouteStart(car), suffix = suffixFrom(start.node);
+  return suffix ? { path: start.prefix.concat(suffix), seg: 0, prog: start.prog } : null;
+}
+function planFrom(car, to, w = weightFor(car)) {
+  return routeFrom(car, node => dijkstra(node, to, w)?.path);
 }
 function setRoute(car, plan) {
   car.path = plan.path; car.seg = plan.seg; car.prog = plan.prog;
   car.routeVer++; car.drawT = 0;
 }
 function remaining(car) { return pathStats(car.path.slice(car.seg), car.prog); }
+function stopAfterBlock(car) {
+  setRoute(car, routeFrom(car, node => [node]));
+  car.state = car.path.length > 1 ? 'reposition' : 'idle';
+}
 function sendTo(car, to, state) {
   const plan = planFrom(car, to);
   car.state = state;
@@ -254,8 +271,7 @@ function strand(car) {
   const p = P(); p.stranded++; p.tows = (p.tows || 0) + 1;
   const was = car.state;
   car.state = 'stranded'; car.strandUntil = S.t + 240;
-  if (car.prog > 0) { car.path = [car.path[car.seg], car.path[car.seg + 1]]; } else { car.path = [car.path[car.seg]]; }
-  car.seg = 0; car.routeVer++;
+  setRoute(car, routeFrom(car, node => [node]));
   if (car.next) { car.next.status = 'waiting'; car.next.car = null; car.next = null; }
   let body = 'Tow truck dispatched. Back at the nearest depot in about 4 min.';
   if (car.job) {
@@ -265,7 +281,22 @@ function strand(car) {
   }
   log({ src: 'exec', kind: 'strand', tag: 'Stranded', head: `${car.id} ran out of battery on ${E(car.path[0], car.path[1])?.name ?? corner(car.path[0])}`, body });
 }
-function moveCar(car, dt) {
+function prepareRoadEntry(car) {
+  if (car.prog !== 0 || car.seg >= car.path.length - 1 || ['idle', 'charging', 'hold', 'stranded'].includes(car.state)) return;
+  const a = car.path[car.seg], b = car.path[car.seg + 1], e = E(a, b);
+  if (!e.blocked) return;
+  if (car.roadActive !== false) S.traffic.ghosts.push({ id: car.id, parts: roadBody(car), until: S.traffic.clock + 2 });
+  car.roadActive = false; car.roadTrail = [];
+  if (S.agent) {
+    const inc = S.incidents.find((i) => i.edge === e && !i.seen); if (inc) discover(inc, car);
+    const plan = planFrom(car, targetOf(car), timeW);
+    if (plan && plan.path[1] !== b) { setRoute(car, plan); return; }
+  }
+  car.holdKind = car.state; car.holdTarget = targetOf(car); car.holdEdge = e.id;
+  car.state = 'hold'; car.holdUntil = S.t + (S.agent ? 10 : HOLD_BASELINE);
+  if (!S.agent) log({ src: 'exec', kind: 'hold', tag: 'Blocked', head: `${car.id} stopped at the crash on ${e.name}`, body: 'The Executor has no live incident feed, so the car sat at the blockage before finding a way round.' });
+}
+function moveCar(car, dt, allowance = Infinity) {
   if (car.state !== 'charging') car.plugged = false;
   if (car.state === 'charging') {
     if (!car.plugged) {
@@ -305,24 +336,22 @@ function moveCar(car, dt) {
   while (rem > 0 && car.seg < car.path.length - 1) {
     const a = car.path[car.seg], b = car.path[car.seg + 1];
     const e = E(a, b);
-    if (car.prog === 0 && e.blocked) {
-      if (S.agent) {
-        const inc = S.incidents.find((i) => i.edge === e && !i.seen); if (inc) discover(inc, car);
-        const plan = planFrom(car, targetOf(car), timeW);
-        if (plan && plan.path[1] !== b) { setRoute(car, plan); continue; }
-      }
-      car.holdKind = car.state; car.holdTarget = targetOf(car); car.holdEdge = e.id;
-      car.state = 'hold'; car.holdUntil = S.t + (S.agent ? 10 : HOLD_BASELINE);
-      if (!S.agent) log({ src: 'exec', kind: 'hold', tag: 'Blocked', head: `${car.id} stopped at the crash on ${e.name}`, body: 'The Executor has no live incident feed, so the car sat at the blockage before finding a way round.' });
-      return;
-    }
-    const v = BASE * e.spd / e.traffic, left = e.len - car.prog, can = v * rem;
-    if (can >= left) { consume(car, left, e); if (car.state === 'stranded') return; car.prog = 0; car.seg++; rem -= left / v; }
-    else { consume(car, can, e); if (car.state === 'stranded') return; car.prog += can; rem = 0; }
+    if (allowance <= 1e-10 || car.prog === 0 && e.blocked) break;
+    const v = BASE * e.spd / e.traffic, left = e.len - car.prog;
+    const batteryDistance = Math.max(0, car.battery / (CONS * (1 + 0.25 * (e.traffic - 1))));
+    const distance = Math.min(left, v * rem, allowance, batteryDistance);
+    if (distance <= 1e-10) break;
+    recordRoadTravel(car, a, b, car.prog, distance);
+    car.prog += distance; allowance -= distance; rem -= distance / v;
+    consume(car, distance, e);
+    if (distance === batteryDistance && car.state !== 'stranded') strand(car);
+    if (car.state === 'stranded') return;
+    if (car.prog >= e.len - 1e-10) { car.prog = 0; car.seg++; }
   }
   if (car.seg >= car.path.length - 1) { car.path = [car.path[car.path.length - 1]]; car.seg = 0; car.prog = 0; arrive(car); }
 }
 function arrive(car) {
+  car.roadActive = false;
   const n = car.path[0];
   if (car.state === 'pickup' && car.job) {
     const r = car.job; r.status = 'riding'; r.pickT = S.t;
@@ -366,6 +395,11 @@ function bestDepotByTime(n, battery = Infinity) {
     if (!best || cost < best.cost) best = { d, cost, st };
   }
   return best;
+}
+function bestDepotFor(car) {
+  const start = committedRouteStart(car), lead = pathStats(start.prefix.concat(start.node), start.prog);
+  const best = bestDepotByTime(start.node, car.battery - lead.pct);
+  return best ? { ...best, cost: best.cost + lead.t, st: { t: best.st.t + lead.t, px: best.st.px + lead.px, pct: best.st.pct + lead.pct } } : null;
 }
 
 /* ---------------- requests ---------------- */
@@ -425,10 +459,7 @@ function agentDispatchAll() {
       if (chained) {
         lead = remaining(c); if (!(lead.t < 300)) continue;
         start = targetOf(c); path = pathTo(tree, start); if (!path) continue;
-      } else if (c.prog > 0) {
-        const cur = c.path[c.seg], nxt = c.path[c.seg + 1];
-        const p = pathTo(tree, nxt); if (!p) continue; path = [cur, ...p];
-      } else { path = pathTo(tree, c.path[c.seg]); if (!path) continue; }
+      } else { const plan = routeFrom(c, node => pathTo(tree, node)); if (!plan) continue; path = plan.path; }
       const a0 = pathStats(path, chained ? 0 : c.prog);
       const a = { t: a0.t + lead.t, px: a0.px, pct: a0.pct };
       const startBat = c.battery - lead.pct;
@@ -503,7 +534,7 @@ function agentCharge() {
     if (c.battery >= threshold) continue;
     // stay out for the queue only if this car can still take one of those rides safely; otherwise it would sit idle forever
     if (waiting > 0 && c.battery > 15 && free.length <= waiting && canServeAny(c)) continue;
-    const b = bestDepotByTime(carNode(c), c.battery); if (!b) continue;
+    const b = bestDepotFor(c); if (!b) continue;
     c.depot = b.d; c.chargeTo = waiting > 2 ? 75 : 90;
     sendTo(c, b.d.node, 'tocharge');
     const idleNow = S.cars.filter((x) => x.state === 'idle').length;
@@ -528,7 +559,7 @@ function agentReroute(reason) {
     const after = c.state === 'tocharge' ? 0 : (bestDepotByTime(targetOf(c))?.st.pct ?? 6);
     if (c.battery - alt.pct - after < RESERVE / 2 && c.state !== 'riding' && c.state !== 'tocharge') {
       // the detour would leave too little to reach a charger: give the job back and charge instead
-      const b = bestDepotByTime(carNode(c), c.battery); if (!b) continue;
+      const b = bestDepotFor(c); if (!b) continue;
       if (c.job) { c.job.status = 'waiting'; c.job.car = null; c.job = null; }
       if (c.next) { c.next.status = 'waiting'; c.next.car = null; c.next = null; }
       c.depot = b.d; c.chargeTo = 90; sendTo(c, b.d.node, 'tocharge'); n++;
@@ -576,6 +607,7 @@ function recomputeTraffic() {
   applyIncidents(null, true);
 }
 function applyIncidents(_, belief) {
+  if (belief) timeRoutes.clear();
   const T = belief ? 'kTraffic' : 'traffic', B = belief ? 'kBlocked' : 'blocked';
   // the fleet sees live traffic, so the baseline is in both; only incidents stay hidden until a car is near
   const lam = Math.min(1, loadAt(S.t) + (S.rush ? 0.35 : 0)), k = lam * dayFactor(SEED);
@@ -647,6 +679,226 @@ function expireIncidents() {
   }
 }
 
+const ROAD_GAP = 0.2, NODE_CLEARANCE = 0.12, ROAD_STEP = 0.5;
+const TRAFFIC_MODELS = [
+  { model: 'sedan', length: 0.48 }, { model: 'hatch', length: 0.44 },
+  { model: 'suv', length: 0.5 }, { model: 'van', length: 0.58 }, { model: 'bus', length: 1.1 },
+];
+const TRAFFIC_COLORS = ['#d6d9dd', '#283b50', '#9a4140', '#52746a', '#a5aab0', '#c5b89b', '#33424d', '#dfdfd4'];
+let trafficNetwork = null;
+function trafficRoads() {
+  if (trafficNetwork) return trafficNetwork;
+  const neighbors = nodes.map(() => new Set());
+  for (const e of edges) { neighbors[e.a].add(e.b); neighbors[e.b].add(e.a); }
+  const active = nodes.map(() => true), queue = [];
+  neighbors.forEach((out, i) => { if (out.size < 2) queue.push(i); });
+  for (let i = 0; i < queue.length; i++) {
+    const at = queue[i];
+    if (!active[at]) continue;
+    active[at] = false;
+    for (const to of neighbors[at]) {
+      neighbors[to].delete(at);
+      if (active[to] && neighbors[to].size < 2) queue.push(to);
+    }
+  }
+  const through = adj.map((out, at) => out.filter(({ to }) => active[at] && active[to]));
+  trafficNetwork = through.some((out) => out.length) ? through : adj;
+  return trafficNetwork;
+}
+function trafficHash(seed, id, step) {
+  let n = Math.imul(seed ^ Math.imul(id + 1, 0x9e3779b1), 0x85ebca6b) ^ Math.imul(step + 1, 0xc2b2ae35);
+  n = Math.imul(n ^ n >>> 16, 0x7feb352d); n = Math.imul(n ^ n >>> 15, 0x846ca68b);
+  return (n ^ n >>> 16) >>> 0;
+}
+function extendTrafficRoute(v, traffic) {
+  const network = trafficRoads();
+  while (v.path.length - v.seg < 16) {
+    const at = v.path[v.path.length - 1], prev = v.path[v.path.length - 2];
+    const choices = network[at].filter(({ to }) => to !== prev);
+    const exits = choices.length ? choices : network[at];
+    if (!exits.length) break;
+    v.path.push(exits[trafficHash(traffic.seed, v.index, v.turn++) % exits.length].to);
+  }
+}
+function initTraffic(world, seed) {
+  const traffic = world.traffic = { vehicles: [], locks: {}, ghosts: [], clock: world.t, seed, remainder: 0 };
+  const lanes = [], network = trafficRoads();
+  for (const e of edges) if (e.len >= 3) {
+    if (E(e.a, e.b) === e && network[e.a].some(({ to }) => to === e.b)) lanes.push({ a: e.a, b: e.b, e });
+    if (!e.oneway && E(e.b, e.a) === e && network[e.b].some(({ to }) => to === e.a)) lanes.push({ a: e.b, b: e.a, e });
+  }
+  lanes.sort((a, b) => trafficHash(seed, a.e.id, a.a) - trafficHash(seed, b.e.id, b.a) || a.a - b.a || a.b - b.b);
+  for (let i = 0; i < Math.min(240, lanes.length); i++) {
+    const lane = lanes[i], h = trafficHash(seed, i, 0);
+    const shape = TRAFFIC_MODELS[h % 20 < 1 ? 4 : h % 4];
+    const v = { id: 'V-' + String(i + 1).padStart(4, '0'), index: i, ...shape, color: TRAFFIC_COLORS[h % TRAFFIC_COLORS.length],
+      path: [lane.a, lane.b], seg: 0, prog: lane.e.len * (0.3 + (h % 400) / 1000), speed: 0, routeVer: 0, turn: 1,
+      roadTrail: [], roadDistance: 0, waitSince: null };
+    v.roadTrail.push({ a: lane.a, b: lane.b, start: Math.max(0, v.prog - v.length / 2), end: v.prog });
+    extendTrafficRoute(v, traffic);
+    Object.assign(v, edgeAt(lane.e, lane.a, v.prog)); traffic.vehicles.push(v);
+  }
+}
+const roadLength = (v) => v.length || 0.48;
+function roadAhead(v, distance) {
+  const out = []; let offset = -v.prog;
+  for (let i = v.seg; i < v.path.length - 1 && offset <= distance; i++) {
+    const a = v.path[i], b = v.path[i + 1], e = E(a, b);
+    out.push({ a, b, e, offset }); offset += e.len;
+  }
+  return out;
+}
+function recordRoadTravel(v, a, b, start, distance) {
+  v.roadDistance = (v.roadDistance || 0) + distance;
+  const trail = v.roadTrail || (v.roadTrail = []), last = trail[trail.length - 1];
+  if (last && last.a === a && last.b === b && Math.abs(last.end - start) < 1e-8) last.end += distance;
+  else trail.push({ a, b, start, end: start + distance });
+  let keep = roadLength(v) / 2 + NODE_CLEARANCE;
+  for (let i = trail.length - 1; i >= 0; i--) {
+    const part = trail[i], length = part.end - part.start;
+    if (length >= keep) { part.start = part.end - keep; trail.splice(0, i); break; }
+    keep -= length;
+  }
+}
+function roadBody(v) {
+  const parts = [], half = roadLength(v) / 2;
+  if (v.seg < v.path.length - 1) {
+    const a = v.path[v.seg], b = v.path[v.seg + 1], e = E(a, b);
+    if (v.prog >= half && v.prog + half <= e.len) return [{ a, b, start: v.prog - half, end: v.prog + half }];
+  }
+  for (const p of v.roadActive === false ? [] : roadAhead(v, half)) {
+    const start = Math.max(0, -p.offset), end = Math.min(p.e.len, half - p.offset);
+    if (end > start) parts.push({ a: p.a, b: p.b, start, end });
+  }
+  let rear = half;
+  const trail = v.roadTrail || [];
+  for (let i = trail.length - 1; i >= 0 && rear > 0; i--) {
+    const p = trail[i], length = Math.min(rear, p.end - p.start);
+    parts.push({ a: p.a, b: p.b, start: p.end - length, end: p.end }); rear -= length;
+  }
+  if (rear > 0 && v.seg < v.path.length - 1 && v.prog > 0 && !trail.length) {
+    parts.push({ a: v.path[v.seg], b: v.path[v.seg + 1], start: Math.max(0, v.prog - rear), end: v.prog });
+  }
+  return parts;
+}
+function roadDesired(v, dt, ambient) {
+  if (!ambient && ['idle', 'charging', 'hold', 'stranded'].includes(v.state)) return 0;
+  if (v.seg < v.path.length - 1) {
+    const e = E(v.path[v.seg], v.path[v.seg + 1]);
+    if (ambient && e.blocked && v.prog === 0) return 0;
+    const distance = BASE * e.spd / e.traffic * dt;
+    if (distance <= e.len - v.prog) return distance;
+  }
+  let distance = 0, time = dt;
+  for (const p of roadAhead(v, 20)) {
+    if (ambient && p.e.blocked && (p.offset >= 0 || v.prog === 0)) break;
+    const speed = BASE * p.e.spd / p.e.traffic, left = p.e.len - Math.max(0, -p.offset);
+    const move = Math.min(left, speed * time); distance += move; time -= move / speed;
+    if (time <= 1e-10) break;
+  }
+  return distance;
+}
+function advanceAmbient(v, distance) {
+  while (distance > 1e-10 && v.seg < v.path.length - 1) {
+    const a = v.path[v.seg], b = v.path[v.seg + 1], e = E(a, b), move = Math.min(distance, e.len - v.prog);
+    recordRoadTravel(v, a, b, v.prog, move); v.prog += move; distance -= move;
+    if (v.prog >= e.len - 1e-10) { v.seg++; v.prog = 0; }
+  }
+  if (v.seg > 8) { v.path = v.path.slice(v.seg); v.seg = 0; v.routeVer++; }
+  extendTrafficRoute(v, S.traffic);
+  const p = v.seg < v.path.length - 1 ? edgeAt(E(v.path[v.seg], v.path[v.seg + 1]), v.path[v.seg], v.prog) : nodes[v.path[v.seg]];
+  Object.assign(v, p);
+}
+function roadTrafficStep(dt) {
+  const traffic = S.traffic;
+  traffic.clock += dt;
+  for (const car of S.cars) prepareRoadEntry(car);
+  const ambient = new Set(traffic.vehicles), actors = [...S.cars, ...traffic.vehicles];
+  const byId = new Map(actors.map((v) => [v.id, v]));
+  const onRoad = (v) => v.seg < v.path.length - 1 && (ambient.has(v) || v.roadActive !== false && !['idle', 'charging'].includes(v.state));
+  for (const [node, lock] of Object.entries(traffic.locks)) {
+    const owner = byId.get(lock.id);
+    if (!owner || (owner.roadDistance || 0) >= lock.clearAt - 1e-9 || (!onRoad(owner) && traffic.clock >= lock.parkUntil)) delete traffic.locks[node];
+  }
+  traffic.ghosts = traffic.ghosts.filter((g) => g.until > traffic.clock);
+  const lanes = new Map();
+  const occupy = (id, parts) => { for (const p of parts) {
+    const key = p.a + '-' + p.b; if (!lanes.has(key)) lanes.set(key, []);
+    lanes.get(key).push({ ...p, id });
+  } };
+  for (const v of actors) if (onRoad(v)) occupy(v.id, roadBody(v));
+  for (const g of traffic.ghosts) occupy(g.id, g.parts);
+  const proposals = actors.map((v) => {
+    const desired = roadDesired(v, dt, ambient.has(v)), half = roadLength(v) / 2;
+    const space = roadLength(v) + Math.max(ROAD_GAP, 2 * NODE_CLEARANCE);
+    const ahead = roadAhead(v, desired + space + NODE_CLEARANCE);
+    let end = v.seg + ahead.length;
+    while (ahead.length && ahead[ahead.length - 1].e.len < space && end < v.path.length - 1) {
+      const last = ahead[ahead.length - 1], a = v.path[end], b = v.path[end + 1];
+      ahead.push({ a, b, e: E(a, b), offset: last.offset + last.e.len }); end++;
+    }
+    let limit = desired;
+    for (const p of ahead) for (const body of lanes.get(p.a + '-' + p.b) || []) {
+      if (body.id === v.id || p.offset + body.end < -half + 1e-9) continue;
+      limit = Math.min(limit, Math.max(0, p.offset + body.start - half - ROAD_GAP));
+    }
+    const first = ahead[0], nodesWanted = [];
+    if (first && desired > 0) {
+      if (v.prog < half + NODE_CLEARANCE) nodesWanted.push({ node: first.a, at: -v.prog });
+      const boundary = first.offset + first.e.len;
+      if (limit + half + NODE_CLEARANCE >= boundary) {
+        let clearance = boundary + half + NODE_CLEARANCE;
+        for (let i = 1; i < ahead.length; i++) {
+          clearance = ahead[i].offset + half + NODE_CLEARANCE;
+          if (ahead[i].e.len >= space) break;
+        }
+        let room = Infinity;
+        for (const p of ahead) for (const body of lanes.get(p.a + '-' + p.b) || []) {
+          if (body.id !== v.id && p.offset + body.end >= boundary) room = Math.min(room, p.offset + body.start - half - ROAD_GAP);
+        }
+        if (room < clearance && v.path.length - v.seg > 2) limit = Math.min(limit, Math.max(0, boundary - half - NODE_CLEARANCE));
+        else for (const p of ahead) {
+          const at = p.offset + p.e.len;
+          if (at <= Math.max(clearance, limit + half + NODE_CLEARANCE)) nodesWanted.push({ node: p.b, at });
+        }
+      }
+    }
+    return { v, desired, limit, half, nodesWanted, path: v.path, routeVer: v.routeVer };
+  });
+  proposals.sort((a, b) => (a.v.waitSince ?? traffic.clock) - (b.v.waitSince ?? traffic.clock) || (a.v.id < b.v.id ? -1 : 1));
+  for (const p of proposals) {
+    const { v, half } = p;
+    if (v.path !== p.path || v.routeVer !== p.routeVer) { v.speed = 0; continue; }
+    const conflict = p.nodesWanted.find(({ node }) => traffic.locks[node] && traffic.locks[node].id !== v.id);
+    if (conflict) {
+      const first = p.nodesWanted.find(({ node }) => traffic.locks[node]?.id !== v.id);
+      p.limit = Math.min(p.limit, Math.max(0, first.at - half - NODE_CLEARANCE));
+    } else if (p.limit > 1e-10) {
+      for (const { node, at } of p.nodesWanted) traffic.locks[node] = {
+        id: v.id, clearAt: (v.roadDistance || 0) + at + half + NODE_CLEARANCE,
+        parkUntil: traffic.clock + 2,
+      };
+    }
+    if (!ambient.has(v) && p.limit > 1e-10) v.roadActive = true;
+    const distanceBefore = v.roadDistance || 0, wasOnRoad = onRoad(v);
+    if (ambient.has(v)) advanceAmbient(v, p.limit); else moveCar(v, dt, p.limit);
+    const moved = (v.roadDistance || 0) - distanceBefore;
+    v.speed = moved / dt;
+    v.waitSince = p.desired > moved + 1e-8 ? v.waitSince ?? traffic.clock : null;
+    if (wasOnRoad && !onRoad(v)) {
+      traffic.ghosts.push({ id: v.id, parts: roadBody(v), until: traffic.clock + 2 });
+      v.roadActive = false; v.roadTrail = [];
+    }
+  }
+}
+function advanceRoadTraffic(dt) {
+  if (!S.traffic) initTraffic(S, SEED);
+  S.traffic.remainder += dt;
+  while (S.traffic.remainder >= ROAD_STEP - 1e-9) {
+    S.traffic.remainder -= ROAD_STEP; roadTrafficStep(ROAD_STEP);
+  }
+}
+
 /* ---------------- sim step ---------------- */
 function step(dt) {
   S.t += dt;
@@ -658,14 +910,14 @@ function step(dt) {
     const rate = S.rph * DEMAND * (S.rush ? 1.5 : 1) * (1 + 0.35 * Math.sin(S.t / 1800 + S.phase)) / 3600;
     T.spawn = S.t + -Math.log(1 - rD()) / rate;
   }
-  for (const c of S.cars) moveCar(c, dt);
+  advanceRoadTraffic(dt);
   // positions live in the sim, not the renderer, so the shadow city's Executor sees where its cars really are
   for (const c of S.cars) { const p = carPos(c); c.x = p.x; c.y = p.y; }
   for (const r of S.reqs) {
     if ((r.status === 'waiting' || r.status === 'assigned') && S.t - r.t0 > CANCEL_AFTER && !r.vip && !r.rescue) {
       r.status = 'cancelled'; P().cancelled++; P().lostFares = (P().lostFares || 0) + fareOf(r);
       if (r.car && r.car.next === r) { r.car.next = null; }
-      else if (r.car) { const c = r.car; c.job = null; if (c.prog > 0) { c.path = [c.path[c.seg], c.path[c.seg + 1]]; c.seg = 0; c.state = 'reposition'; } else { c.path = [c.path[c.seg]]; c.seg = 0; c.state = 'idle'; } c.routeVer++; }
+      else if (r.car) { const c = r.car; c.job = null; stopAfterBlock(c); }
       log({ src: 'exec', kind: 'hold', tag: 'Cancelled', head: `${r.id} ${r.name} gave up after 15 min` });
     }
   }
@@ -819,13 +1071,12 @@ function options(riderId, limit = 4) {
     if (!usableCar(c) || c === r.car) continue;
     let path, lead = { t: 0, pct: 0 }; const chained = c.state === 'riding';
     if (chained) { lead = remaining(c); path = pathTo(tree, targetOf(c)); }
-    else if (c.prog > 0) { const p = pathTo(tree, c.path[c.seg + 1]); path = p && [c.path[c.seg], ...p]; }
-    else path = pathTo(tree, c.path[c.seg]);
+    else path = routeFrom(c, node => pathTo(tree, node))?.path;
     if (!path) continue;
     const a = pathStats(path, chained ? 0 : c.prog);
     const pickT = a.t + lead.t + (c.state === 'charging' || c.state === 'tocharge' ? 0 : 0);
     const startBat = c.battery - lead.pct, left = startBat - a.pct - trip.pct;
-    cands.push({ car: c.id, state: c.state, pickupMin: r1(pickT / 60), emptyKm: r1(a.px / 100), batteryNow: r1(c.battery), batteryAtDropoff: r1(left), canReachChargerAfter: left - backPct >= 0, safe: left - backPct >= RESERVE });
+    cands.push({ car: c.id, state: c.state, pickupMin: r1(pickT / 60), emptyKm: r1(a.px / 100), batteryNow: r1(c.battery), batteryAtDropoff: r1(left), canReachChargerAfter: !!bestDepotByTime(r.to, left), safe: !!after && left - backPct >= RESERVE });
   }
   cands.sort((x, y) => x.pickupMin - y.pickupMin);
   const wNow = S.t - r.t0;
@@ -835,9 +1086,7 @@ function options(riderId, limit = 4) {
 /* ---------- actions (the model's levers) ---------- */
 function say(kind, tag, head, reason) { EVENTS.push({ t: S.t, src: 'agent', kind, tag, head, body: reason || undefined, model: true }); }
 function freeUp(c) {
-  // stop a car where it is: finish the current block if mid-road
-  if (c.prog > 0) { c.path = [c.path[c.seg], c.path[c.seg + 1]]; c.seg = 0; c.state = 'reposition'; } else { c.path = [carNode(c)]; c.seg = 0; c.prog = 0; c.state = 'idle'; }
-  c.routeVer++;
+  stopAfterBlock(c);
 }
 function unassign(r) {
   if (!r.car) return;
@@ -876,7 +1125,7 @@ function actCharge(carId, depot, chargeTo = 90, reason) {
   if (c.next) unassign(c.next);
   if (c.job) unassign(c.job);
   let d = depotBy(depot), drive;
-  if (!d) { const b = bestDepotByTime(carNode(c), c.battery); if (!b) throw new Error(`${c.id} cannot reach a depot on ${r1(c.battery)}% by any known route.`); d = b.d; drive = b.st; }
+  if (!d) { const b = bestDepotFor(c); if (!b) throw new Error(`${c.id} cannot reach a depot on ${r1(c.battery)}% by any known route.`); d = b.d; drive = b.st; }
   c.depot = d; c.chargeTo = Math.max(10, Math.min(100, +chargeTo || 90));
   if (!sendTo(c, d.node, 'tocharge')) throw new Error(`No known route to ${d.name} right now; the car will retry in 30 s.`);
   if (c.path.length === 1) arrive(c);
@@ -941,9 +1190,10 @@ function advance(maxS, stopOnEvent, minS = 20, why = []) {
 /* ---------- live view snapshot (for the browser pages) ---------- */
 function liveSnap(evFrom) {
   const reqOut = (r) => ({ ...r, car: r.car ? r.car.id : null });
-  const carOut = (c) => ({ id: c.id, path: c.path, seg: c.seg, prog: c.prog, x: c.x, y: c.y, state: c.state, battery: c.battery, job: c.job ? c.job.id : null, next: c.next ? c.next.id : null, depot: c.depot ? c.depot.name : null, chargeTo: c.chargeTo, plugged: !!c.plugged, queueT: c.queueT, holdUntil: c.holdUntil, strandUntil: c.strandUntil, routeVer: c.routeVer, known: [...c.known] });
+  const carOut = (c) => ({ id: c.id, roadActive: c.roadActive, path: c.path, seg: c.seg, prog: c.prog, x: c.x, y: c.y, speed: c.speed, state: c.state, battery: c.battery, job: c.job ? c.job.id : null, next: c.next ? c.next.id : null, depot: c.depot ? c.depot.name : null, chargeTo: c.chargeTo, plugged: !!c.plugged, queueT: c.queueT, holdUntil: c.holdUntil, strandUntil: c.strandUntil, routeVer: c.routeVer, known: [...c.known] });
   return {
     t: S.t, seed: SEED, rph: Math.round(S.rph * DEMAND), agent: S.agent, agentSince: S.agentSince, connectT: S.connectT, hazIdx: S.hazIdx, rush: S.rush,
+    traffic: { vehicles: S.traffic.vehicles.map(({ id, model, color, length, path, seg, prog, speed, x, y, ang, routeVer }) => ({ id, model, color, length, path: [...path], seg, prog, speed, x, y, ang, routeVer })) },
     cars: S.cars.map(carOut), reqs: S.reqs.map(reqOut), incidents: S.incidents.map((i) => ({ id: i.id, type: i.type, edge: i.edge.id, until: i.until, seen: i.seen, seenBy: i.seenBy, src: i.src })),
     periods: S.periods, waitSeries: S.waitSeries.slice(-120),
     shadow: SHADOW ? { periods: SHADOW.periods, cars: SHADOW.cars.map(carOut), reqs: SHADOW.reqs.map(reqOut), waitSeries: SHADOW.waitSeries.slice(-120) } : null,

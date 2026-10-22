@@ -1,0 +1,260 @@
+{
+  "simulation": "9296f524be75d04a475fa6c3d6964f131d47021a",
+  "demand": 2,
+  "seeds": [
+    1101,
+    2207,
+    3313,
+    4421,
+    5531
+  ],
+  "policies": [
+    "executor",
+    "scripted",
+    "lazy",
+    "greedy"
+  ],
+  "source": "Full pre-traffic node bench.js replay. Exact route-tree cache preload used to complete the scripted replay; no physics or bot changes. Executor matches uncached baseline on every seed. Baseline times rounded to 0.01 h and DNF revenue to $1000 in original output.",
+  "results": [
+    {
+      "policy": "executor",
+      "seed": 1101,
+      "summary": {
+        "finished": true,
+        "finishMin": 1179.6,
+        "revenue": 1000000,
+        "trips": 720,
+        "cancelled": 499,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "executor",
+      "seed": 2207,
+      "summary": {
+        "finished": false,
+        "finishMin": null,
+        "revenue": 990000,
+        "trips": 790,
+        "cancelled": 1249,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "executor",
+      "seed": 3313,
+      "summary": {
+        "finished": false,
+        "finishMin": null,
+        "revenue": 944000,
+        "trips": 770,
+        "cancelled": 1640,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "executor",
+      "seed": 4421,
+      "summary": {
+        "finished": true,
+        "finishMin": 1390.8,
+        "revenue": 1000000,
+        "trips": 800,
+        "cancelled": 1091,
+        "stranded": 2
+      }
+    },
+    {
+      "policy": "executor",
+      "seed": 5531,
+      "summary": {
+        "finished": true,
+        "finishMin": 1073.4,
+        "revenue": 1000000,
+        "trips": 652,
+        "cancelled": 217,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "scripted",
+      "seed": 1101,
+      "summary": {
+        "finished": true,
+        "finishMin": 844.8,
+        "revenue": 1000000,
+        "trips": 651,
+        "cancelled": 239,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "scripted",
+      "seed": 2207,
+      "summary": {
+        "finished": true,
+        "finishMin": 832.1999999999999,
+        "revenue": 1000000,
+        "trips": 656,
+        "cancelled": 501,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "scripted",
+      "seed": 3313,
+      "summary": {
+        "finished": true,
+        "finishMin": 829.8,
+        "revenue": 1000000,
+        "trips": 678,
+        "cancelled": 667,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "scripted",
+      "seed": 4421,
+      "summary": {
+        "finished": true,
+        "finishMin": 856.8,
+        "revenue": 1000000,
+        "trips": 666,
+        "cancelled": 526,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "scripted",
+      "seed": 5531,
+      "summary": {
+        "finished": true,
+        "finishMin": 832.8000000000001,
+        "revenue": 1000000,
+        "trips": 583,
+        "cancelled": 66,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "lazy",
+      "seed": 1101,
+      "summary": {
+        "finished": true,
+        "finishMin": 1326,
+        "revenue": 1000000,
+        "trips": 751,
+        "cancelled": 638,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "lazy",
+      "seed": 2207,
+      "summary": {
+        "finished": false,
+        "finishMin": null,
+        "revenue": 820000,
+        "trips": 667,
+        "cancelled": 1371,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "lazy",
+      "seed": 3313,
+      "summary": {
+        "finished": false,
+        "finishMin": null,
+        "revenue": 776000,
+        "trips": 640,
+        "cancelled": 1769,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "lazy",
+      "seed": 4421,
+      "summary": {
+        "finished": false,
+        "finishMin": null,
+        "revenue": 904000,
+        "trips": 719,
+        "cancelled": 1248,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "lazy",
+      "seed": 5531,
+      "summary": {
+        "finished": true,
+        "finishMin": 1215.6000000000001,
+        "revenue": 1000000,
+        "trips": 682,
+        "cancelled": 308,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "greedy",
+      "seed": 1101,
+      "summary": {
+        "finished": true,
+        "finishMin": 704.4,
+        "revenue": 1000000,
+        "trips": 611,
+        "cancelled": 131,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "greedy",
+      "seed": 2207,
+      "summary": {
+        "finished": true,
+        "finishMin": 683.4000000000001,
+        "revenue": 1000000,
+        "trips": 605,
+        "cancelled": 346,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "greedy",
+      "seed": 3313,
+      "summary": {
+        "finished": true,
+        "finishMin": 658.8000000000001,
+        "revenue": 1000000,
+        "trips": 619,
+        "cancelled": 434,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "greedy",
+      "seed": 4421,
+      "summary": {
+        "finished": true,
+        "finishMin": 684.6,
+        "revenue": 1000000,
+        "trips": 611,
+        "cancelled": 342,
+        "stranded": 0
+      }
+    },
+    {
+      "policy": "greedy",
+      "seed": 5531,
+      "summary": {
+        "finished": true,
+        "finishMin": 781.1999999999999,
+        "revenue": 1000000,
+        "trips": 568,
+        "cancelled": 41,
+        "stranded": 0
+      }
+    }
+  ]
+}

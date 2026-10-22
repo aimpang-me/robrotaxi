@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>RobroTaxi HQ</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -43,8 +48,9 @@
   --r: 4px;
   --ease: cubic-bezier(.16, 1, .3, 1);
 }
-html, body { height: 100%; }
+html, body { height: 100%; min-width: 320px; }
 body {
+  margin: 0;
   background: var(--asphalt);
   color: var(--paint);
   font-family: var(--f-ui);
@@ -54,7 +60,7 @@ body {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 ::selection { background: var(--yellow); color: var(--yellow-ink); }
-* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -125,7 +131,7 @@ main {
   gap: 12px;
   min-height: 0;
 }
-.rail { background: var(--asphalt-2); border: 1px solid var(--line); border-radius: var(--r); min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.rail { background: var(--asphalt-2); border: 1px solid var(--line); border-radius: var(--r); min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .rail-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 12px 14px 10px; }
 .rail-h h2 { font-size: var(--t-sm); font-weight: 800; text-transform: uppercase; letter-spacing: .1em; }
 .rail-h span { color: var(--muted); font-size: var(--t-sm); }
@@ -137,15 +143,15 @@ main {
 .car-btn {
   width: 100%; text-align: left; background: transparent; border: 1px solid transparent; border-radius: var(--r);
   display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 8px; row-gap: 3px;
-  padding: 8px; align-items: center;
+  padding: 8px; min-height: 62px; align-items: center;
 }
 .car-btn:hover { background: var(--asphalt-3); }
 .car-btn[aria-pressed="true"] { border-color: var(--yellow); background: var(--asphalt-3); }
 .car-id { grid-row: 1 / 3; font-family: var(--f-num); font-weight: 600; font-size: var(--t-lg); }
 .car-state { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--t-sm); font-weight: 700; }
 .car-state i { width: 8px; height: 8px; border-radius: 2px; flex: none; background: var(--paint-2); }
-.car-state em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.car-job { grid-column: 2 / 4; font-size: var(--t-sm); color: var(--paint-2); line-height: 1.35; }
+.car-state em { font-style: normal; overflow-wrap: anywhere; line-height: 1.25; }
+.car-job { min-width: 0; overflow-wrap: anywhere; grid-column: 2 / 4; font-size: var(--t-sm); color: var(--paint-2); line-height: 1.35; }
 .bat { grid-column: 3; grid-row: 1; display: flex; align-items: center; gap: 6px; }
 .bat-num { font-family: var(--f-num); font-size: var(--t-sm); font-weight: 600; min-width: 3.2ch; text-align: right; order: 2; }
 .bat-bar { width: 50px; height: 6px; background: var(--road); position: relative; overflow: hidden; border-radius: 1px; }
@@ -172,7 +178,7 @@ main {
 .metric { padding: 10px 14px 11px; display: grid; gap: 2px; align-content: start; min-width: 0; }
 .metric + .metric { border-left: 1px solid var(--line); }
 .metric h3 { font-size: var(--t-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--paint-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.metric .v { font-family: var(--f-num); font-size: var(--t-2xl); font-weight: 600; line-height: 1.15; }
+.metric .v { font-variant-numeric: tabular-nums; font-family: var(--f-num); font-size: var(--t-2xl); font-weight: 600; line-height: 1.15; }
 .metric .v small { font-size: var(--t-sm); color: var(--paint-2); font-weight: 500; margin-left: 2px; }
 .metric .cmp { font-size: var(--t-sm); color: var(--muted); min-height: 2.8em; line-height: 1.4; }
 .chart p { margin: 2px 0 0; font-size: var(--t-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -223,7 +229,8 @@ main {
 .rail { stroke: var(--line); stroke-width: 1.5px; stroke-dasharray: 5 3; fill: none; vector-effect: non-scaling-stroke; }
 .minor { stroke: var(--road); stroke-opacity: .55; stroke-width: .55; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .outside { stroke: var(--road); stroke-opacity: .5; stroke-width: 1.1; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.playarea { fill: none; stroke: var(--paint); stroke-opacity: .14; stroke-width: 1.5px; stroke-dasharray: 2 6; vector-effect: non-scaling-stroke; pointer-events: none; }
+.service-matte { fill: var(--asphalt); fill-rule: evenodd; pointer-events: none; }
+.service-edge { fill: none; stroke: var(--paint-2); stroke-opacity: .65; stroke-width: 1.5px; stroke-dasharray: 10 6; vector-effect: non-scaling-stroke; pointer-events: none; }
 .road-case { stroke: #121212; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .road { stroke: var(--road); stroke-linecap: round; stroke-linejoin: round; fill: none; }
 .road.xway { stroke: #262624; }
@@ -243,9 +250,10 @@ main {
 .hover-edge { stroke-width: 9px; vector-effect: non-scaling-stroke; stroke-opacity: .6; fill: none; stroke-linecap: round; pointer-events: none; }
 .jam-line { stroke: var(--orange); stroke-width: 6px; vector-effect: non-scaling-stroke; fill: none; stroke-linecap: round; stroke-dasharray: 6 3; pointer-events: none; }
 .crash-line { stroke: var(--red); stroke-width: 7px; vector-effect: non-scaling-stroke; fill: none; stroke-dasharray: 5 4; pointer-events: none; }
-.route { fill: none; stroke-width: 3.5px; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; transition: opacity .25s; }
-.route-under { fill: none; stroke: var(--road); stroke-width: 6.5px; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; opacity: .7; }
-.dim .route:not(.sel), .dim .route-under:not(.sel) { opacity: .18; }
+.route { fill: none; stroke-width: 2.2px; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; opacity: .7; transition: opacity .25s; }
+.route.sel { opacity: .8; }
+.route-under { fill: none; stroke: var(--road); stroke-width: 4.2px; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; opacity: .45; }
+.dim .route:not(.sel), .dim .route-under:not(.sel) { opacity: .08; }
 .car { cursor: pointer; }
 .car-body { fill: var(--paint); stroke: var(--road); stroke-width: 1.4; }
 .car-glass { fill: var(--road); }
@@ -274,9 +282,9 @@ main {
 .agentrail { grid-area: agent; }
 .agent { padding: 0 14px 14px; display: grid; gap: 10px; }
 .agent-copy { margin: 0; color: var(--paint-2); font-size: var(--t-md); }
-.field { display: grid; gap: 4px; }
+.field { display: grid; gap: 4px; min-width: 0; }
 .field label, .wt label { font-size: var(--t-xs); font-weight: 700; color: var(--paint-2); text-transform: uppercase; letter-spacing: .06em; }
-.field input { height: 32px; padding: 0 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--road); font-family: var(--f-num); font-size: var(--t-sm); }
+.field input { min-width: 0; width: 100%; height: 32px; padding: 0 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--road); font-family: var(--f-num); font-size: var(--t-sm); }
 .field input:focus-visible { outline-offset: 0; }
 .weights { display: grid; gap: 8px; }
 .wt { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
@@ -297,7 +305,7 @@ main {
 .agent:not([data-state="on"]) .on-only { display: none; }
 .agent-id { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: center; padding: 10px 12px; border-radius: var(--r); background: var(--road); }
 .agent-id svg { grid-row: 1 / 3; width: 22px; height: 22px; color: var(--yellow); }
-.agent-id b { font-size: var(--t-md); }
+.agent-id b { font-size: var(--t-md); overflow-wrap: anywhere; }
 .agent-id span { font-size: var(--t-sm); color: var(--paint-2); font-family: var(--f-num); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .handshake { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-family: var(--f-num); font-size: var(--t-sm); color: var(--paint-2); }
 .handshake li { display: grid; grid-template-columns: 14px 1fr; gap: 6px; animation: rise .45s var(--ease) both; }
@@ -340,7 +348,10 @@ main {
 
 @media (max-width: 1440px) {
   main { grid-template-columns: 256px minmax(0, 1fr) 328px; }
-  .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(150px, 1fr); }
+  .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .chart { grid-column: 1 / -1; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr); column-gap: 12px; align-items: center; }
+  .chart svg { grid-column: 2; grid-row: 1 / 3; height: 38px; margin: 0; }
+  .chart p { white-space: normal; }
   .metric { padding-inline: 12px; }
 }
 @media (max-width: 1100px) {
@@ -365,13 +376,14 @@ main {
   .agent-pill { order: 2; }
   .ctrls { order: 3; width: 100%; gap: 8px 10px; }
   .clock { margin-right: auto; }
-  .maptag { display: none; }
+  .maptag { max-width: calc(100% - 12px); left: 6px; bottom: 6px; padding: 3px 6px; background: var(--road); line-height: 1.3; }
+  .map-help { display: none; }
   .top { gap: 10px 14px; }
 }
 @media (max-width: 560px) {
   .mapwrap { aspect-ratio: auto; }
-  .mapscroll { position: relative; }
-  #map { position: relative; width: 100%; height: auto; aspect-ratio: 980 / 690; }
+  .mapscroll { position: relative; overflow-x: auto; }
+  #map { position: relative; width: 720px; max-width: none; height: auto; aspect-ratio: 980 / 690; }
 }
 @media (pointer: coarse), (max-width: 560px) {
   .btn, .seg button, .seedctl input, .field input, .agent[data-state="on"] .connect, .connect { height: 44px; }
@@ -380,7 +392,7 @@ main {
   .switch input { width: 40px; height: 24px; border-radius: 12px; }
   .switch input::after { width: 18px; height: 18px; top: 3px; left: 3px; }
   .switch input:checked::after { transform: translateX(16px); }
-  .wt input { height: 32px; }
+  .wt input { height: 44px; }
   .tune summary { padding-block: 10px; }
   .tune[open] summary { margin-bottom: 0; }
 }
@@ -388,6 +400,8 @@ main {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 </style>
+</head>
+<body>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
@@ -456,7 +470,7 @@ main {
           <g id="gCars"></g>
           <g id="gHit"></g>
         </svg></div>
-        <div class="maptag">Scroll to zoom · drag to pan · map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, ODbL</div>
+        <div class="maptag"><span class="map-help">Scroll to zoom · drag to pan · </span>Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, ODbL</div>
         <div class="toast" id="toast" data-show="false"></div>
       </div>
       <div class="tools" role="toolbar" aria-label="Incidents and rides">
@@ -499,7 +513,7 @@ main {
   </main>
 </div>
 
-<script src="map/toronto.js"></script>
+<script src="map/toronto.js?v=shoreline-3"></script>
 <script>
 (() => {
 'use strict';
@@ -590,9 +604,6 @@ edges.forEach((e) => {
   e.mx = m.x; e.my = m.y;
   e.rushy = e.motorway || DISTRICTS.some((d) => d.w >= 1.5 && Math.hypot(m.x - d.x, m.y - d.y) < 65);
 });
-// Background traffic. Other vehicles are not simulated one by one: each road has a share of the day's load (heavier on
-// bigger roads near the busy districts) and the load follows the time of day, so every car on it slows. The views draw
-// vehicles from the same numbers (mcp/viewer/traffic.js), so a slow road always has a visible reason.
 const DIST_PEAK = Math.max(...nodes.map((n) => DISTRICTS.reduce((s, d) => s + d.w * Math.exp(-((n.x - d.x) ** 2 + (n.y - d.y) ** 2) / (2 * 110 * 110)), 0)));
 edges.forEach((e) => {
   const g = DISTRICTS.reduce((s, d) => s + d.w * Math.exp(-((e.mx - d.x) ** 2 + (e.my - d.y) ** 2) / (2 * 110 * 110)), 0) / DIST_PEAK;
@@ -622,8 +633,11 @@ const MIN_TRIP = 120;      // riders don't hail for less than about 1.2 km as th
 /* ---------------- routing ---------------- */
 // the agent plans on what the fleet has seen (kBlocked/kTraffic); cars drive on the real road (blocked/traffic)
 const timeW = (e) => e.kBlocked ? Infinity : e.len / (BASE * e.spd / e.kTraffic);
+const timeRoutes = new Map();
 // binary-heap Dijkstra; `rev` walks edges backwards (shortest paths INTO the source)
 function heapSearch(from, to, w, rev) {
+  const key = from + "," + to + "," + !!rev;
+  if (w === timeW && timeRoutes.has(key)) return timeRoutes.get(key);
   const N = nodes.length, dist = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), done = new Uint8Array(N);
   const hk = [], hv = [];
   const push = (k, v) => { let i = hk.length; hk.push(k); hv.push(v); while (i > 0) { const p = (i - 1) >> 1; if (hk[p] <= k) break; hk[i] = hk[p]; hv[i] = hv[p]; i = p; } hk[i] = k; hv[i] = v; };
@@ -638,7 +652,12 @@ function heapSearch(from, to, w, rev) {
       const nd = dist[u] + c; if (nd < dist[v]) { dist[v] = nd; prev[v] = u; push(nd, v); }
     }
   }
-  return { dist, prev };
+  const result = { dist, prev };
+  if (w === timeW) {
+    if (timeRoutes.size >= 512) timeRoutes.clear();
+    timeRoutes.set(key, result);
+  }
+  return result;
 }
 function dijkstra(from, to, w) {
   if (from === to) return { path: [from], cost: 0 };
@@ -685,7 +704,9 @@ function initCars() {
     const n = usable[Math.floor(rC() * usable.length)];
     Object.assign(c, { path: [n], seg: 0, prog: 0, x: nodes[n].x, y: nodes[n].y, ang: 0, battery: c.i === low ? 12 + rC() * 10 : 30 + rC() * 65, state: 'idle', job: null, next: null, depot: null, chargeTo: 0, holdUntil: 0, holdEdge: null, lastLowLog: 0 });
     c.known.clear(); c.routeVer++;
+    c.roadActive = false; c.roadTrail = []; c.roadDistance = 0; c.waitSince = null; c.speed = 0;
   }
+  initTraffic(S, SEED);
 }
 function makeHazards() {
   // any real block can see a crash or a jam, longer roads more often; not the depot driveways
@@ -708,9 +729,9 @@ const isFree = (c) => c.state === 'idle' || c.state === 'reposition';
 function cloneWorld(W) {
   const reqMap = new Map();
   const reqs = W.reqs.map((r) => { const c = { ...r, car: null, mine: false }; reqMap.set(r, c); return c; });
-  const cars = W.cars.map((c) => ({ ...c, path: [...c.path], known: new Set(c.known), job: c.job ? reqMap.get(c.job) : null, next: null }));
+  const cars = W.cars.map((c) => ({ ...c, path: [...c.path], roadTrail: (c.roadTrail || []).map((p) => ({ ...p })), known: new Set(c.known), job: c.job ? reqMap.get(c.job) : null, next: null }));
   cars.forEach((c) => { if (c.job) c.job.car = c; });
-  return { ...W, shadow: true, agent: false, cars, reqs, timers: { ...W.timers }, periods: { exec: newPeriod(W.t), agent: null }, waitSeries: [], selected: null };
+  return { ...W, shadow: true, agent: false, cars, reqs, traffic: JSON.parse(JSON.stringify(W.traffic)), timers: { ...W.timers }, periods: { exec: newPeriod(W.t), agent: null }, waitSeries: [], selected: null };
 }
 
 /* ---------------- feed ---------------- */
@@ -740,20 +761,30 @@ function weightFor(car) {
   if (S.agent) return timeW;
   return (e) => (car.known.has(e.id) ? Infinity : e.len); // executor alone: shortest road, no live incident feed
 }
-function planFrom(car, to, w = weightFor(car)) {
-  if (car.prog > 0) {
-    const cur = car.path[car.seg], nxt = car.path[car.seg + 1];
-    const r = dijkstra(nxt, to, w); if (!r) return null;
-    return { path: [cur, ...r.path], seg: 0, prog: car.prog };
+function committedRouteStart(car) {
+  if (car.prog > 0 || car.roadActive !== false && car.seg < car.path.length - 1) {
+    let end = car.seg + 1, front = roadLength(car) / 2 - (E(car.path[car.seg], car.path[end]).len - car.prog);
+    while (front > 0 && end < car.path.length - 1) { front -= E(car.path[end], car.path[end + 1]).len; end++; }
+    return { prefix: car.path.slice(car.seg, end), node: car.path[end], prog: car.prog };
   }
-  const r = dijkstra(car.path[car.seg], to, w); if (!r) return null;
-  return { path: r.path, seg: 0, prog: 0 };
+  return { prefix: [], node: car.path[car.seg], prog: 0 };
+}
+function routeFrom(car, suffixFrom) {
+  const start = committedRouteStart(car), suffix = suffixFrom(start.node);
+  return suffix ? { path: start.prefix.concat(suffix), seg: 0, prog: start.prog } : null;
+}
+function planFrom(car, to, w = weightFor(car)) {
+  return routeFrom(car, node => dijkstra(node, to, w)?.path);
 }
 function setRoute(car, plan) {
   car.path = plan.path; car.seg = plan.seg; car.prog = plan.prog;
   car.routeVer++; car.drawT = performance.now();
 }
 function remaining(car) { return pathStats(car.path.slice(car.seg), car.prog); }
+function stopAfterBlock(car) {
+  setRoute(car, routeFrom(car, node => [node]));
+  car.state = car.path.length > 1 ? 'reposition' : 'idle';
+}
 function sendTo(car, to, state) {
   const plan = planFrom(car, to);
   car.state = state;
@@ -775,8 +806,7 @@ function strand(car) {
   const p = P(); p.stranded++;
   const was = car.state;
   car.state = 'stranded'; car.strandUntil = S.t + 240;
-  if (car.prog > 0) { car.path = [car.path[car.seg], car.path[car.seg + 1]]; } else { car.path = [car.path[car.seg]]; }
-  car.seg = 0; car.routeVer++;
+  setRoute(car, routeFrom(car, node => [node]));
   if (car.next) { car.next.status = 'waiting'; car.next.car = null; car.next = null; }
   let body = 'Tow truck dispatched. Back at the nearest depot in about 4 min.';
   if (car.job) {
@@ -786,7 +816,22 @@ function strand(car) {
   }
   log({ src: 'exec', kind: 'strand', tag: 'Stranded', head: `${car.id} ran out of battery on ${E(car.path[0], car.path[1])?.name ?? corner(car.path[0])}`, body });
 }
-function moveCar(car, dt) {
+function prepareRoadEntry(car) {
+  if (car.prog !== 0 || car.seg >= car.path.length - 1 || ['idle', 'charging', 'hold', 'stranded'].includes(car.state)) return;
+  const a = car.path[car.seg], b = car.path[car.seg + 1], e = E(a, b);
+  if (!e.blocked) return;
+  if (car.roadActive !== false) S.traffic.ghosts.push({ id: car.id, parts: roadBody(car), until: S.traffic.clock + 2 });
+  car.roadActive = false; car.roadTrail = [];
+  if (S.agent) {
+    const inc = S.incidents.find((i) => i.edge === e && !i.seen); if (inc) discover(inc, car);
+    const plan = planFrom(car, targetOf(car), timeW);
+    if (plan && plan.path[1] !== b) { setRoute(car, plan); return; }
+  }
+  car.holdKind = car.state; car.holdTarget = targetOf(car); car.holdEdge = e.id;
+  car.state = 'hold'; car.holdUntil = S.t + (S.agent ? 10 : HOLD_BASELINE);
+  if (!S.agent) log({ src: 'exec', kind: 'hold', tag: 'Blocked', head: `${car.id} stopped at the crash on ${e.name}`, body: 'The Executor has no live incident feed, so the car sat at the blockage before finding a way round.' });
+}
+function moveCar(car, dt, allowance = Infinity) {
   if (car.state !== 'charging') car.plugged = false;
   if (car.state === 'charging') {
     if (!car.plugged) {
@@ -826,24 +871,22 @@ function moveCar(car, dt) {
   while (rem > 0 && car.seg < car.path.length - 1) {
     const a = car.path[car.seg], b = car.path[car.seg + 1];
     const e = E(a, b);
-    if (car.prog === 0 && e.blocked) {
-      if (S.agent) {
-        const inc = S.incidents.find((i) => i.edge === e && !i.seen); if (inc) discover(inc, car);
-        const plan = planFrom(car, targetOf(car), timeW);
-        if (plan && plan.path[1] !== b) { setRoute(car, plan); continue; }
-      }
-      car.holdKind = car.state; car.holdTarget = targetOf(car); car.holdEdge = e.id;
-      car.state = 'hold'; car.holdUntil = S.t + (S.agent ? 10 : HOLD_BASELINE);
-      if (!S.agent) log({ src: 'exec', kind: 'hold', tag: 'Blocked', head: `${car.id} stopped at the crash on ${e.name}`, body: 'The Executor has no live incident feed, so the car sat at the blockage before finding a way round.' });
-      return;
-    }
-    const v = BASE * e.spd / e.traffic, left = e.len - car.prog, can = v * rem;
-    if (can >= left) { consume(car, left, e); if (car.state === 'stranded') return; car.prog = 0; car.seg++; rem -= left / v; }
-    else { consume(car, can, e); if (car.state === 'stranded') return; car.prog += can; rem = 0; }
+    if (allowance <= 1e-10 || car.prog === 0 && e.blocked) break;
+    const v = BASE * e.spd / e.traffic, left = e.len - car.prog;
+    const batteryDistance = Math.max(0, car.battery / (CONS * (1 + 0.25 * (e.traffic - 1))));
+    const distance = Math.min(left, v * rem, allowance, batteryDistance);
+    if (distance <= 1e-10) break;
+    recordRoadTravel(car, a, b, car.prog, distance);
+    car.prog += distance; allowance -= distance; rem -= distance / v;
+    consume(car, distance, e);
+    if (distance === batteryDistance && car.state !== 'stranded') strand(car);
+    if (car.state === 'stranded') return;
+    if (car.prog >= e.len - 1e-10) { car.prog = 0; car.seg++; }
   }
   if (car.seg >= car.path.length - 1) { car.path = [car.path[car.path.length - 1]]; car.seg = 0; car.prog = 0; arrive(car); }
 }
 function arrive(car) {
+  car.roadActive = false;
   const n = car.path[0];
   if (car.state === 'pickup' && car.job) {
     const r = car.job; r.status = 'riding'; r.pickT = S.t;
@@ -887,6 +930,11 @@ function bestDepotByTime(n, battery = Infinity) {
     if (!best || cost < best.cost) best = { d, cost, st };
   }
   return best;
+}
+function bestDepotFor(car) {
+  const start = committedRouteStart(car), lead = pathStats(start.prefix.concat(start.node), start.prog);
+  const best = bestDepotByTime(start.node, car.battery - lead.pct);
+  return best ? { ...best, cost: best.cost + lead.t, st: { t: best.st.t + lead.t, px: best.st.px + lead.px, pct: best.st.pct + lead.pct } } : null;
 }
 
 /* ---------------- requests ---------------- */
@@ -946,10 +994,7 @@ function agentDispatchAll() {
       if (chained) {
         lead = remaining(c); if (!(lead.t < 300)) continue;
         start = targetOf(c); path = pathTo(tree, start); if (!path) continue;
-      } else if (c.prog > 0) {
-        const cur = c.path[c.seg], nxt = c.path[c.seg + 1];
-        const p = pathTo(tree, nxt); if (!p) continue; path = [cur, ...p];
-      } else { path = pathTo(tree, c.path[c.seg]); if (!path) continue; }
+      } else { const plan = routeFrom(c, node => pathTo(tree, node)); if (!plan) continue; path = plan.path; }
       const a0 = pathStats(path, chained ? 0 : c.prog);
       const a = { t: a0.t + lead.t, px: a0.px, pct: a0.pct };
       const startBat = c.battery - lead.pct;
@@ -1024,7 +1069,7 @@ function agentCharge() {
     if (c.battery >= threshold) continue;
     // stay out for the queue only if this car can still take one of those rides safely; otherwise it would sit idle forever
     if (waiting > 0 && c.battery > 15 && free.length <= waiting && canServeAny(c)) continue;
-    const b = bestDepotByTime(carNode(c), c.battery); if (!b) continue;
+    const b = bestDepotFor(c); if (!b) continue;
     c.depot = b.d; c.chargeTo = waiting > 2 ? 75 : 90;
     sendTo(c, b.d.node, 'tocharge');
     const idleNow = S.cars.filter((x) => x.state === 'idle').length;
@@ -1049,7 +1094,7 @@ function agentReroute(reason) {
     const after = c.state === 'tocharge' ? 0 : (bestDepotByTime(targetOf(c))?.st.pct ?? 6);
     if (c.battery - alt.pct - after < RESERVE / 2 && c.state !== 'riding' && c.state !== 'tocharge') {
       // the detour would leave too little to reach a charger: give the job back and charge instead
-      const b = bestDepotByTime(carNode(c), c.battery); if (!b) continue;
+      const b = bestDepotFor(c); if (!b) continue;
       if (c.job) { c.job.status = 'waiting'; c.job.car = null; c.job = null; }
       if (c.next) { c.next.status = 'waiting'; c.next.car = null; c.next = null; }
       c.depot = b.d; c.chargeTo = 90; sendTo(c, b.d.node, 'tocharge'); n++;
@@ -1097,6 +1142,7 @@ function recomputeTraffic() {
   applyIncidents(null, true);
 }
 function applyIncidents(_, belief) {
+  if (belief) timeRoutes.clear();
   const T = belief ? 'kTraffic' : 'traffic', B = belief ? 'kBlocked' : 'blocked';
   // the fleet sees live traffic, so the baseline is in both; only incidents stay hidden until a car is near
   const lam = Math.min(1, loadAt(S.t) + (S.rush ? 0.35 : 0)), k = lam * dayFactor(SEED);
@@ -1168,6 +1214,226 @@ function expireIncidents() {
   }
 }
 
+const ROAD_GAP = 0.2, NODE_CLEARANCE = 0.12, ROAD_STEP = 0.5;
+const TRAFFIC_MODELS = [
+  { model: 'sedan', length: 0.48 }, { model: 'hatch', length: 0.44 },
+  { model: 'suv', length: 0.5 }, { model: 'van', length: 0.58 }, { model: 'bus', length: 1.1 },
+];
+const TRAFFIC_COLORS = ['#d6d9dd', '#283b50', '#9a4140', '#52746a', '#a5aab0', '#c5b89b', '#33424d', '#dfdfd4'];
+let trafficNetwork = null;
+function trafficRoads() {
+  if (trafficNetwork) return trafficNetwork;
+  const neighbors = nodes.map(() => new Set());
+  for (const e of edges) { neighbors[e.a].add(e.b); neighbors[e.b].add(e.a); }
+  const active = nodes.map(() => true), queue = [];
+  neighbors.forEach((out, i) => { if (out.size < 2) queue.push(i); });
+  for (let i = 0; i < queue.length; i++) {
+    const at = queue[i];
+    if (!active[at]) continue;
+    active[at] = false;
+    for (const to of neighbors[at]) {
+      neighbors[to].delete(at);
+      if (active[to] && neighbors[to].size < 2) queue.push(to);
+    }
+  }
+  const through = adj.map((out, at) => out.filter(({ to }) => active[at] && active[to]));
+  trafficNetwork = through.some((out) => out.length) ? through : adj;
+  return trafficNetwork;
+}
+function trafficHash(seed, id, step) {
+  let n = Math.imul(seed ^ Math.imul(id + 1, 0x9e3779b1), 0x85ebca6b) ^ Math.imul(step + 1, 0xc2b2ae35);
+  n = Math.imul(n ^ n >>> 16, 0x7feb352d); n = Math.imul(n ^ n >>> 15, 0x846ca68b);
+  return (n ^ n >>> 16) >>> 0;
+}
+function extendTrafficRoute(v, traffic) {
+  const network = trafficRoads();
+  while (v.path.length - v.seg < 16) {
+    const at = v.path[v.path.length - 1], prev = v.path[v.path.length - 2];
+    const choices = network[at].filter(({ to }) => to !== prev);
+    const exits = choices.length ? choices : network[at];
+    if (!exits.length) break;
+    v.path.push(exits[trafficHash(traffic.seed, v.index, v.turn++) % exits.length].to);
+  }
+}
+function initTraffic(world, seed) {
+  const traffic = world.traffic = { vehicles: [], locks: {}, ghosts: [], clock: world.t, seed, remainder: 0 };
+  const lanes = [], network = trafficRoads();
+  for (const e of edges) if (e.len >= 3) {
+    if (E(e.a, e.b) === e && network[e.a].some(({ to }) => to === e.b)) lanes.push({ a: e.a, b: e.b, e });
+    if (!e.oneway && E(e.b, e.a) === e && network[e.b].some(({ to }) => to === e.a)) lanes.push({ a: e.b, b: e.a, e });
+  }
+  lanes.sort((a, b) => trafficHash(seed, a.e.id, a.a) - trafficHash(seed, b.e.id, b.a) || a.a - b.a || a.b - b.b);
+  for (let i = 0; i < Math.min(240, lanes.length); i++) {
+    const lane = lanes[i], h = trafficHash(seed, i, 0);
+    const shape = TRAFFIC_MODELS[h % 20 < 1 ? 4 : h % 4];
+    const v = { id: 'V-' + String(i + 1).padStart(4, '0'), index: i, ...shape, color: TRAFFIC_COLORS[h % TRAFFIC_COLORS.length],
+      path: [lane.a, lane.b], seg: 0, prog: lane.e.len * (0.3 + (h % 400) / 1000), speed: 0, routeVer: 0, turn: 1,
+      roadTrail: [], roadDistance: 0, waitSince: null };
+    v.roadTrail.push({ a: lane.a, b: lane.b, start: Math.max(0, v.prog - v.length / 2), end: v.prog });
+    extendTrafficRoute(v, traffic);
+    Object.assign(v, edgeAt(lane.e, lane.a, v.prog)); traffic.vehicles.push(v);
+  }
+}
+const roadLength = (v) => v.length || 0.48;
+function roadAhead(v, distance) {
+  const out = []; let offset = -v.prog;
+  for (let i = v.seg; i < v.path.length - 1 && offset <= distance; i++) {
+    const a = v.path[i], b = v.path[i + 1], e = E(a, b);
+    out.push({ a, b, e, offset }); offset += e.len;
+  }
+  return out;
+}
+function recordRoadTravel(v, a, b, start, distance) {
+  v.roadDistance = (v.roadDistance || 0) + distance;
+  const trail = v.roadTrail || (v.roadTrail = []), last = trail[trail.length - 1];
+  if (last && last.a === a && last.b === b && Math.abs(last.end - start) < 1e-8) last.end += distance;
+  else trail.push({ a, b, start, end: start + distance });
+  let keep = roadLength(v) / 2 + NODE_CLEARANCE;
+  for (let i = trail.length - 1; i >= 0; i--) {
+    const part = trail[i], length = part.end - part.start;
+    if (length >= keep) { part.start = part.end - keep; trail.splice(0, i); break; }
+    keep -= length;
+  }
+}
+function roadBody(v) {
+  const parts = [], half = roadLength(v) / 2;
+  if (v.seg < v.path.length - 1) {
+    const a = v.path[v.seg], b = v.path[v.seg + 1], e = E(a, b);
+    if (v.prog >= half && v.prog + half <= e.len) return [{ a, b, start: v.prog - half, end: v.prog + half }];
+  }
+  for (const p of v.roadActive === false ? [] : roadAhead(v, half)) {
+    const start = Math.max(0, -p.offset), end = Math.min(p.e.len, half - p.offset);
+    if (end > start) parts.push({ a: p.a, b: p.b, start, end });
+  }
+  let rear = half;
+  const trail = v.roadTrail || [];
+  for (let i = trail.length - 1; i >= 0 && rear > 0; i--) {
+    const p = trail[i], length = Math.min(rear, p.end - p.start);
+    parts.push({ a: p.a, b: p.b, start: p.end - length, end: p.end }); rear -= length;
+  }
+  if (rear > 0 && v.seg < v.path.length - 1 && v.prog > 0 && !trail.length) {
+    parts.push({ a: v.path[v.seg], b: v.path[v.seg + 1], start: Math.max(0, v.prog - rear), end: v.prog });
+  }
+  return parts;
+}
+function roadDesired(v, dt, ambient) {
+  if (!ambient && ['idle', 'charging', 'hold', 'stranded'].includes(v.state)) return 0;
+  if (v.seg < v.path.length - 1) {
+    const e = E(v.path[v.seg], v.path[v.seg + 1]);
+    if (ambient && e.blocked && v.prog === 0) return 0;
+    const distance = BASE * e.spd / e.traffic * dt;
+    if (distance <= e.len - v.prog) return distance;
+  }
+  let distance = 0, time = dt;
+  for (const p of roadAhead(v, 20)) {
+    if (ambient && p.e.blocked && (p.offset >= 0 || v.prog === 0)) break;
+    const speed = BASE * p.e.spd / p.e.traffic, left = p.e.len - Math.max(0, -p.offset);
+    const move = Math.min(left, speed * time); distance += move; time -= move / speed;
+    if (time <= 1e-10) break;
+  }
+  return distance;
+}
+function advanceAmbient(v, distance) {
+  while (distance > 1e-10 && v.seg < v.path.length - 1) {
+    const a = v.path[v.seg], b = v.path[v.seg + 1], e = E(a, b), move = Math.min(distance, e.len - v.prog);
+    recordRoadTravel(v, a, b, v.prog, move); v.prog += move; distance -= move;
+    if (v.prog >= e.len - 1e-10) { v.seg++; v.prog = 0; }
+  }
+  if (v.seg > 8) { v.path = v.path.slice(v.seg); v.seg = 0; v.routeVer++; }
+  extendTrafficRoute(v, S.traffic);
+  const p = v.seg < v.path.length - 1 ? edgeAt(E(v.path[v.seg], v.path[v.seg + 1]), v.path[v.seg], v.prog) : nodes[v.path[v.seg]];
+  Object.assign(v, p);
+}
+function roadTrafficStep(dt) {
+  const traffic = S.traffic;
+  traffic.clock += dt;
+  for (const car of S.cars) prepareRoadEntry(car);
+  const ambient = new Set(traffic.vehicles), actors = [...S.cars, ...traffic.vehicles];
+  const byId = new Map(actors.map((v) => [v.id, v]));
+  const onRoad = (v) => v.seg < v.path.length - 1 && (ambient.has(v) || v.roadActive !== false && !['idle', 'charging'].includes(v.state));
+  for (const [node, lock] of Object.entries(traffic.locks)) {
+    const owner = byId.get(lock.id);
+    if (!owner || (owner.roadDistance || 0) >= lock.clearAt - 1e-9 || (!onRoad(owner) && traffic.clock >= lock.parkUntil)) delete traffic.locks[node];
+  }
+  traffic.ghosts = traffic.ghosts.filter((g) => g.until > traffic.clock);
+  const lanes = new Map();
+  const occupy = (id, parts) => { for (const p of parts) {
+    const key = p.a + '-' + p.b; if (!lanes.has(key)) lanes.set(key, []);
+    lanes.get(key).push({ ...p, id });
+  } };
+  for (const v of actors) if (onRoad(v)) occupy(v.id, roadBody(v));
+  for (const g of traffic.ghosts) occupy(g.id, g.parts);
+  const proposals = actors.map((v) => {
+    const desired = roadDesired(v, dt, ambient.has(v)), half = roadLength(v) / 2;
+    const space = roadLength(v) + Math.max(ROAD_GAP, 2 * NODE_CLEARANCE);
+    const ahead = roadAhead(v, desired + space + NODE_CLEARANCE);
+    let end = v.seg + ahead.length;
+    while (ahead.length && ahead[ahead.length - 1].e.len < space && end < v.path.length - 1) {
+      const last = ahead[ahead.length - 1], a = v.path[end], b = v.path[end + 1];
+      ahead.push({ a, b, e: E(a, b), offset: last.offset + last.e.len }); end++;
+    }
+    let limit = desired;
+    for (const p of ahead) for (const body of lanes.get(p.a + '-' + p.b) || []) {
+      if (body.id === v.id || p.offset + body.end < -half + 1e-9) continue;
+      limit = Math.min(limit, Math.max(0, p.offset + body.start - half - ROAD_GAP));
+    }
+    const first = ahead[0], nodesWanted = [];
+    if (first && desired > 0) {
+      if (v.prog < half + NODE_CLEARANCE) nodesWanted.push({ node: first.a, at: -v.prog });
+      const boundary = first.offset + first.e.len;
+      if (limit + half + NODE_CLEARANCE >= boundary) {
+        let clearance = boundary + half + NODE_CLEARANCE;
+        for (let i = 1; i < ahead.length; i++) {
+          clearance = ahead[i].offset + half + NODE_CLEARANCE;
+          if (ahead[i].e.len >= space) break;
+        }
+        let room = Infinity;
+        for (const p of ahead) for (const body of lanes.get(p.a + '-' + p.b) || []) {
+          if (body.id !== v.id && p.offset + body.end >= boundary) room = Math.min(room, p.offset + body.start - half - ROAD_GAP);
+        }
+        if (room < clearance && v.path.length - v.seg > 2) limit = Math.min(limit, Math.max(0, boundary - half - NODE_CLEARANCE));
+        else for (const p of ahead) {
+          const at = p.offset + p.e.len;
+          if (at <= Math.max(clearance, limit + half + NODE_CLEARANCE)) nodesWanted.push({ node: p.b, at });
+        }
+      }
+    }
+    return { v, desired, limit, half, nodesWanted, path: v.path, routeVer: v.routeVer };
+  });
+  proposals.sort((a, b) => (a.v.waitSince ?? traffic.clock) - (b.v.waitSince ?? traffic.clock) || (a.v.id < b.v.id ? -1 : 1));
+  for (const p of proposals) {
+    const { v, half } = p;
+    if (v.path !== p.path || v.routeVer !== p.routeVer) { v.speed = 0; continue; }
+    const conflict = p.nodesWanted.find(({ node }) => traffic.locks[node] && traffic.locks[node].id !== v.id);
+    if (conflict) {
+      const first = p.nodesWanted.find(({ node }) => traffic.locks[node]?.id !== v.id);
+      p.limit = Math.min(p.limit, Math.max(0, first.at - half - NODE_CLEARANCE));
+    } else if (p.limit > 1e-10) {
+      for (const { node, at } of p.nodesWanted) traffic.locks[node] = {
+        id: v.id, clearAt: (v.roadDistance || 0) + at + half + NODE_CLEARANCE,
+        parkUntil: traffic.clock + 2,
+      };
+    }
+    if (!ambient.has(v) && p.limit > 1e-10) v.roadActive = true;
+    const distanceBefore = v.roadDistance || 0, wasOnRoad = onRoad(v);
+    if (ambient.has(v)) advanceAmbient(v, p.limit); else moveCar(v, dt, p.limit);
+    const moved = (v.roadDistance || 0) - distanceBefore;
+    v.speed = moved / dt;
+    v.waitSince = p.desired > moved + 1e-8 ? v.waitSince ?? traffic.clock : null;
+    if (wasOnRoad && !onRoad(v)) {
+      traffic.ghosts.push({ id: v.id, parts: roadBody(v), until: traffic.clock + 2 });
+      v.roadActive = false; v.roadTrail = [];
+    }
+  }
+}
+function advanceRoadTraffic(dt) {
+  if (!S.traffic) initTraffic(S, SEED);
+  S.traffic.remainder += dt;
+  while (S.traffic.remainder >= ROAD_STEP - 1e-9) {
+    S.traffic.remainder -= ROAD_STEP; roadTrafficStep(ROAD_STEP);
+  }
+}
+
 /* ---------------- sim step ---------------- */
 function step(dt) {
   S.t += dt;
@@ -1179,14 +1445,14 @@ function step(dt) {
     const rate = S.rph * (S.rush ? 1.5 : 1) * (1 + 0.35 * Math.sin(S.t / 1800 + S.phase)) / 3600;
     T.spawn = S.t + -Math.log(1 - rD()) / rate;
   }
-  for (const c of S.cars) moveCar(c, dt);
+  advanceRoadTraffic(dt);
   // positions live in the sim, not the renderer, so the shadow city's Executor sees where its cars really are
   for (const c of S.cars) { const p = carPos(c); c.x = p.x; c.y = p.y; }
   for (const r of S.reqs) {
     if ((r.status === 'waiting' || r.status === 'assigned') && S.t - r.t0 > CANCEL_AFTER && !r.vip && !r.rescue) {
       r.status = 'cancelled'; P().cancelled++;
       if (r.car && r.car.next === r) { r.car.next = null; }
-      else if (r.car) { const c = r.car; c.job = null; if (c.prog > 0) { c.path = [c.path[c.seg], c.path[c.seg + 1]]; c.seg = 0; c.state = 'reposition'; } else { c.path = [c.path[c.seg]]; c.seg = 0; c.state = 'idle'; } c.routeVer++; }
+      else if (r.car) { const c = r.car; c.job = null; stopAfterBlock(c); }
       log({ src: 'exec', kind: 'hold', tag: 'Cancelled', head: `${r.id} ${r.name} gave up after 15 min` });
     }
   }
@@ -1214,8 +1480,25 @@ const flatD = (f, close) => { let d = ''; for (let i = 0; i < f.length; i += 2) 
 // buildings: integer metres, first point absolute then deltas (map/FORMAT.md)
 function bldRing(b) { const pts = []; let x = 0, y = 0; for (let i = 2; i < b.length && typeof b[i] === 'number'; i += 2) { x += b[i]; y += b[i + 1]; pts.push([x / 10, y / 10]); } return pts; }
 const ROAD_W = (e) => e.motorway ? (e.oneway ? 1.4 : 2.4) : e.kmh >= 50 ? 1.8 : e.kmh >= 40 ? 1.4 : 1.0;   // units (10 m) of carriageway
+function serviceBoundary(play, clearance) {
+  const winding = Math.sign(play.reduce((a, p, i) => { const q = play[(i + 1) % play.length]; return a + p[0] * q[1] - q[0] * p[1]; }, 0));
+  const lines = play.map((p, i) => {
+    const q = play[(i + 1) % play.length], dx = q[0] - p[0], dy = q[1] - p[1], len = Math.hypot(dx, dy);
+    const x = -dy / len * winding, y = dx / len * winding;
+    return { x, y, d: x * p[0] + y * p[1] - clearance };
+  });
+  return lines.map((b, i) => {
+    const a = lines[(i + lines.length - 1) % lines.length], det = a.x * b.y - b.x * a.y;
+    return [(a.d * b.y - b.d * a.y) / det, (a.x * b.d - b.x * a.d) / det];
+  });
+}
+function insideService(x, y, ring = MAPG.play, margin = 0) {
+  const winding = Math.sign(ring.reduce((a, p, i) => { const q = ring[(i + 1) % ring.length]; return a + p[0] * q[1] - q[0] * p[1]; }, 0));
+  return ring.every((p, i) => { const q = ring[(i + 1) % ring.length], dx = q[0] - p[0], dy = q[1] - p[1]; return winding * (dx * (y - p[1]) - dy * (x - p[0])) >= margin * Math.hypot(dx, dy) - 1e-6; });
+}
+const SERVICE = serviceBoundary(MAPG.play, 14);
 // the view: the play area plus a margin; wheel or pinch zooms, drag pans
-const PLAYB = (() => { const xs = MAPG.play.map((p) => p[0]), ys = MAPG.play.map((p) => p[1]); return { x0: Math.min(...xs) - 8, y0: Math.min(...ys) - 8, x1: Math.max(...xs) + 8, y1: Math.max(...ys) + 8 }; })();
+const PLAYB = (() => { const xs = SERVICE.map((p) => p[0]), ys = SERVICE.map((p) => p[1]); return { x0: Math.min(...xs) - 8, y0: Math.min(...ys) - 8, x1: Math.max(...xs) + 8, y1: Math.max(...ys) + 8 }; })();
 const VB = { x: PLAYB.x0, y: PLAYB.y0, w: PLAYB.x1 - PLAYB.x0, h: PLAYB.y1 - PLAYB.y0 };
 const VB_HOME = { ...VB };
 let UI = VB.w / 980;       // map units per screen-ish pixel of the old 980-wide map; markers scale with it
@@ -1261,13 +1544,11 @@ function drawBase() {
   const S0 = SCENE || { land: [], water: [], parks: [], rail: [], minor: [], buildings: [], landmarks: [] };
   el('rect', { x: -2000, y: -2000, width: MAP_W + 4000, height: MAP_H + 4000, class: 'lake' }, g);
   el('path', { class: 'land', d: S0.land.map((f) => flatD(f, true)).join('') }, g);
-  el('path', { class: 'water', d: S0.water.map((f) => flatD(f, true)).join('') }, g);
+  S0.water.forEach((f, i) => el('path', { class: 'water', d: [f, ...(S0.waterHoles?.[i] || [])].map((ring) => flatD(ring, true)).join(''), 'fill-rule': 'evenodd' }, g));
   el('path', { class: 'park', d: S0.parks.map((f) => flatD(f, true)).join('') }, g);
   el('path', { class: 'rail', d: S0.rail.map((f) => flatD(f)).join('') }, g);
   el('path', { class: 'minor', d: S0.minor.filter((m) => m[0] === 0).map((m) => flatD(m.slice(1))).join('') }, g);
   el('path', { class: 'outside', d: S0.minor.filter((m) => m[0] > 0).map((m) => flatD(m.slice(1))).join('') }, g);
-  // the play area: streets outside it are drawn but not driven
-  el('path', { class: 'playarea', d: ptsD(MAPG.play) + 'Z' }, g);
   // roads by width: casing then surface, expressways on top of the streets they cross
   const byW = new Map();
   for (const e of edges) { const k = (e.elevated || e.motorway ? 'm' : 's') + ROAD_W(e); if (!byW.has(k)) byW.set(k, []); byW.get(k).push(e); }
@@ -1279,6 +1560,8 @@ function drawBase() {
   const tiers = [[0, 20], [20, 60], [60, 150], [150, 1000]];
   tiers.forEach(([lo, hi], i) => el('path', { class: 'bld t' + i, d: S0.buildings.filter((b) => b[0] >= lo && b[0] < hi).map((b) => ptsD(bldRing(b)) + 'Z').join('') }, g));
   for (const L of S0.landmarks) if (L.poly.length) el('path', { class: 'bld lm', d: flatD(L.poly, true) }, g);
+  el('path', { class: 'service-matte', d: `M-10000 -10000H10000V10000H-10000Z${ptsD(SERVICE)}Z` }, g);
+  el('path', { class: 'service-edge', d: ptsD(SERVICE) + 'Z' }, g);
   // labels: district names, main streets, landmarks; sized in screen pixels via --ui
   const lg = $('gLabels');
   const label = (txt, x, y, cls, rot) => { const t = el('text', { class: cls, 'data-at': `${x.toFixed(1)} ${y.toFixed(1)}`, x: 0, y: 0, 'text-anchor': 'middle' }, lg); if (rot != null) t.dataset.rot = rot; t.textContent = txt; return t; };
@@ -1400,7 +1683,10 @@ function renderAvatars() {
       const wait = Math.max(0, S.t - r.t0), mood = moodOf(wait), N = nodes[r.from], k = stack.get(r.from) || 0, x = N.x + (12 + k * 26) * u, y = N.y - 14 * u - 26 * u; stack.set(r.from, k + 1); // riders at one spot line up
       avatar(g, x, y, f, mood, Math.min(1, wait / CANCEL_AFTER), MOOD_COL[mood], mood === 'angry' ? 'av-pulse' : '');
       live.set(r.id, { x, y, f, st: 'wait' });
-    } else if (r.status === 'riding' && r.car && r.car.sx != null) live.set(r.id, { x: r.car.sx - 16 * u, y: r.car.sy - 16 * u, f, st: 'ride' });
+    } else if (r.status === 'riding' && r.car) {
+      const pose = carEls.get(r.car);
+      if (pose?.sx != null) live.set(r.id, { x: pose.sx - 16 * u, y: pose.sy - 16 * u, f, st: 'ride' });
+    }
   }
   const gone = [...avSeen].filter(([id]) => !live.has(id)).map(([, s]) => s);
   if (gone.length <= 6) for (const s of gone) { // more at once is a world reset
@@ -1447,22 +1733,41 @@ function fitTags() {
   $('map').style.setProperty('--map-k', (1 / UI).toFixed(3));
 }
 addEventListener('resize', fitTags);
+function parkedPose(c) {
+  if (c.roadActive !== false) return null;
+  const from = c.parkNode ?? c.path[c.seg], next = adj[from].find(({ e }) => !e.motorway) || adj[from][0];
+  if (!next) return null;
+  const p = edgeAt(next.e, from, 0), a = p.ang * Math.PI / 180, offset = ROAD_W(next.e) / 2 + 0.16;
+  return { x: p.x - Math.sin(a) * offset, y: p.y + Math.cos(a) * offset, ang: p.ang, edge: next.e };
+}
+function displayHeading(record, target, now, reduced) {
+  const dt = now - record.headingAt;
+  if (record.heading == null || reduced || dt > 500 || dt < 0) record.heading = target;
+  else {
+    let delta = target - record.heading;
+    while (delta > 180) delta -= 360;
+    while (delta < -180) delta += 360;
+    record.heading += delta * (1 - Math.exp(-dt / 100));
+  }
+  record.headingAt = now;
+  return record.heading;
+}
 function renderMap(now) {
   const anySel = !!S.selected;
   $('gRoutes').classList.toggle('dim', anySel);
   for (const c of S.cars) {
     const r = carEls.get(c);
-    const p = carPos(c);
+    const parked = parkedPose(c), p = parked || carPos(c);
+    const target = parked || c.livePos || (c.seg < c.path.length - 1 && c.prog > 0) ? p.ang : r.heading ?? p.ang;
+    const heading = displayHeading(r, target, now, reduceMotion);
     // drive on the right: offset from the centreline
     let ox = 0, oy = 0;
-    if (c.seg < c.path.length - 1) { const e = E(c.path[c.seg], c.path[c.seg + 1]); const a = p.ang * Math.PI / 180, o = e && e.oneway ? 0 : LANE; ox = -Math.sin(a) * o; oy = Math.cos(a) * o; }
-    let ang = p.ang; let da = ang - c.ang; while (da > 180) da -= 360; while (da < -180) da += 360;
-    c.ang += da * 0.35; c.x = p.x; c.y = p.y;
+    if (!parked && c.seg < c.path.length - 1) { const e = E(c.path[c.seg], c.path[c.seg + 1]); const a = target * Math.PI / 180, o = e && e.oneway ? 0 : LANE; ox = -Math.sin(a) * o; oy = Math.cos(a) * o; }
     r.grp.setAttribute('transform', `translate(${(p.x + ox).toFixed(2)} ${(p.y + oy).toFixed(2)}) scale(${UI.toFixed(4)})`);
-    c.sx = p.x + ox; c.sy = p.y + oy;
-    const crowd = S.cars.some((o) => o.i < c.i && o.sx != null && Math.abs(o.sx - c.sx) < tagSize * 2.4 * UI && Math.abs(o.sy - c.sy) < tagSize * 2.2 * UI);
+    r.sx = p.x + ox; r.sy = p.y + oy;
+    const crowd = S.cars.some((o) => { const q = carEls.get(o); return o.i < c.i && q.sx != null && Math.abs(q.sx - r.sx) < tagSize * 2.4 * UI && Math.abs(q.sy - r.sy) < tagSize * 2.2 * UI; });
     r.num.setAttribute('y', crowd ? (12 + tagSize).toFixed(1) : (-10).toFixed(1));
-    r.body.setAttribute('transform', `rotate(${c.ang.toFixed(1)}) scale(0.95)`);
+    r.body.setAttribute('transform', `rotate(${heading.toFixed(1)}) scale(0.95)`);
     r.lamp.setAttribute('fill', LAMP[c.state] || 'var(--paint-2)');
     r.ring.setAttribute('visibility', S.selected === c || S.hoverCar === c ? 'visible' : 'hidden');
     r.ring.setAttribute('stroke', c.state === 'stranded' ? 'var(--red)' : 'var(--yellow)');
@@ -1749,6 +2054,7 @@ $('map').addEventListener('click', (ev) => {
   if (S.tool !== 'ride') { if (S.tool === 'none') select(null); return; }
   const svg = $('map'); const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
   const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  if (!insideService(p.x, p.y)) { toast('Outside the service area. Choose a point inside the city.'); return; }
   let best = 0, bd = 1e9; for (const n of nodes) { if (!streetNode[n.id]) continue; const d = Math.hypot(n.x - p.x, n.y - p.y); if (d < bd) { bd = d; best = n.id; } }
   if (S.rideDraft == null) { S.rideDraft = best; $('hint').textContent = `Pickup at ${corner(best)}. Now click your destination.`; return; }
   if (best === S.rideDraft) { toast('Pick a destination at least a block away'); return; }
@@ -1760,12 +2066,12 @@ $('map').addEventListener('click', (ev) => {
 });
 
 /* ---------------- loop ---------------- */
-let last = performance.now(), panelAcc = 0;
+let last = performance.now(), panelAcc = 0, simAcc = 0;
 function frame(now) {
   const real = Math.min(0.1, (now - last) / 1000); last = now;
   if (!S.paused && !document.hidden) {
-    let sim = real * SIM_PER_REAL * S.speed;
-    while (sim > 0) { const d = Math.min(2, sim); step(d); if (SHADOW) { S = SHADOW; step(d); S = MAIN; } sim -= d; }
+    simAcc += real * SIM_PER_REAL * S.speed;
+    while (simAcc >= 2) { step(2); if (SHADOW) { S = SHADOW; step(2); S = MAIN; } simAcc -= 2; }
   }
   renderMap(now);
   panelAcc += real;
@@ -1777,13 +2083,14 @@ function frame(now) {
 drawBase(); buildCars(); buildFleet(); setAgentUI(); fitTags();
 function resetWorld(seed) {
   if (S.connecting) return;
-  SEED = seed; seedStreams(seed);
+  SEED = seed; seedStreams(seed); simAcc = 0;
   Object.assign(S, { t: 8 * 3600, agent: false, agentSince: null, reqs: [], nextReq: 101, nextInc: 1, hazIdx: 0, connectT: null, selected: null, rideDraft: null, waitSeries: [],
     timers: { spawn: 8 * 3600 + 20, dispatch: 0, charge: 0, reroute: 0, repo: 0, sense: 0 }, periods: { exec: newPeriod(8 * 3600), agent: null } });
   S.incidents.length = 0; SHADOW = null;
   S.rph = 18 + Math.floor(rD() * 38); S.phase = rD() * 6.28;
   S.hazards = makeHazards();
   initCars(); recomputeTraffic();
+  for (const r of carEls.values()) { delete r.heading; delete r.headingAt; delete r.sx; delete r.sy; }
   feedEl.replaceChildren(); $('handshake').replaceChildren(); $('tune').open = true; setAgentUI(); select(null);
   $('seedIn').value = seed;
   $('seedLabel').textContent = `Seed ${seed} · about ${S.rph} riders/hr · ${S.hazards.filter((h) => h.t < 12 * 3600).length} hidden hazards by noon`;
@@ -1798,6 +2105,20 @@ $('seedIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') { const 
 resetWorld(SEED);
 { const ms = $('mapscroll'); ms.scrollLeft = (ms.scrollWidth - ms.clientWidth) / 2; }
 window.__robro = { main: () => MAIN, shadow: () => SHADOW, run(n) { for (let i = 0; i < n; i++) { step(2); if (SHADOW) { S = SHADOW; step(2); S = MAIN; } } } };
+window.__robroTrafficHooks = { main: () => MAIN, E, edgeAt };
+window.__robroAudioHooks = { readFrame() {
+  const playback = window.__robroPlayback;
+  return { simTime: MAIN.t, paused: playback ? playback.paused : MAIN.paused, revision: SEED + ':' + (playback?.revision || 0),
+    focus: { x: (VB.x + VB.w / 2) * 10, y: (VB.y + VB.h / 2) * 10 }, right: { x: 1, y: 0 }, viewDistance: VB.w * 10,
+    vehicles: MAIN.cars.concat(MAIN.traffic?.vehicles || []).map(c => {
+      const p = carPos(c); return { id: c.id, kind: c.model === 'bus' ? 'bus' : c.model ? 'car' : 'ev', x: p.x * 10, y: p.y * 10, roadActive: c.roadActive };
+    }) };
+} };
 requestAnimationFrame(frame);
 })();
 </script>
+<script src="mcp/viewer/traffic.js"></script>
+<script src="mcp/viewer/city-audio.js"></script>
+
+</body>
+</html>

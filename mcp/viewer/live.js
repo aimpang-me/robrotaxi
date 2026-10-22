@@ -1,6 +1,52 @@
-// Live mode for the RobroTaxi pages: the server's game drives the map; the page only draws.
-// Injected by server.js into /view/2d and /view/3d. Needs ?game=<id>.
-(() => {
+class Playback {
+  constructor({ maxPackets = 240, maxBytes = 48 * 1024 * 1024 } = {}) {
+    this.maxPackets = maxPackets; this.maxBytes = maxBytes;
+    this.future = []; this.events = []; this.base = null;
+    this.time = null; this.sourceTime = null; this.lastAt = null;
+    this.bytes = 0; this.seenEvent = -1; this.resync = false;
+  }
+  push(packet, bytes = 0) {
+    const { meta, snap } = packet;
+    if (this.sourceTime != null && snap.t < this.sourceTime) return;
+    const first = snap.evTo - snap.events.length;
+    for (let i = 0; i < snap.events.length; i++) if (first + i > this.seenEvent) this.events.push(snap.events[i]);
+    this.seenEvent = Math.max(this.seenEvent, snap.evTo - 1);
+    const next = { meta, snap: { ...snap, events: [] }, bytes };
+    const last = this.future.at(-1);
+    if (last?.snap.t === snap.t) this.bytes -= this.future.pop().bytes;
+    this.future.push(next); this.bytes += bytes;
+    this.sourceTime = snap.t;
+    if (this.time == null) this.time = snap.t;
+    if (this.future.length > this.maxPackets || this.bytes > this.maxBytes || this.events.length > 4000) {
+      this.future = [next]; this.bytes = bytes; this.resync = true;
+      this.events = this.events.slice(-4000);
+    }
+  }
+  step(now, { paused = false, speed = 1, hidden = false } = {}) {
+    const dt = this.lastAt == null ? 0 : Math.max(0, Math.min(0.1, (now - this.lastAt) / 1000));
+    this.lastAt = now;
+    if (this.time == null) return { due: [], events: [], base: null, next: null, time: null, buffered: 0, resynced: false };
+    let resynced = false;
+    if (!paused) {
+      if (hidden || this.resync) { this.time = this.sourceTime; resynced = this.resync; this.resync = false; }
+      else {
+        const rate = Math.max(1, Math.min(60, (this.sourceTime - this.time) / 12)) * speed;
+        this.time = Math.min(this.sourceTime, this.time + dt * rate);
+      }
+    }
+    const due = [], events = [];
+    if (!paused || !this.base) {
+      while (this.future.length && this.future[0].snap.t <= this.time) {
+        this.base = this.future.shift(); this.bytes -= this.base.bytes; due.push(this.base);
+      }
+      while (this.events.length && this.events[0].t <= this.time) events.push(this.events.shift());
+    }
+    return { due, events, base: this.base, next: this.future[0] || null, time: this.time, buffered: this.sourceTime - this.time, resynced };
+  }
+}
+
+if (typeof module !== 'undefined') module.exports = Playback;
+if (typeof window !== 'undefined') (() => {
   const id = new URLSearchParams(location.search).get('game');
   const H = window.__robroLiveHooks;
   const is3d = location.pathname.endsWith('/3d');
@@ -8,50 +54,57 @@
   if (id && is3d && (typeof THREE === 'undefined' || !H)) { location.replace('/view/2d' + location.search); return; }
   if (!id || !H) return;
   window.__robroLive = true;
+  const playback = new Playback();
+  const playbackStatus = window.__robroPlayback = { paused: false, revision: 0 };
 
   const css = document.createElement('style');
   css.textContent = `
-#robroHud{position:fixed;left:16px;bottom:16px;z-index:9999;display:grid;gap:6px;width:min(250px,calc(100vw - 32px));
-  padding:10px 12px;border-radius:12px;background:rgba(18,20,24,.94);color:#f2f0e8;font:500 13px/1.3 Overpass,system-ui,sans-serif;
-  box-shadow:0 6px 24px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1)}
-#robroHud .who{display:grid}#robroHud .bar{width:100%!important}
-#robroHud b{font-weight:800}#robroHud .mono{font-family:'Overpass Mono',ui-monospace,monospace}
-#robroHud .live{color:#121418;background:#f5c518;border-radius:6px;padding:1px 7px;font-weight:800;letter-spacing:.06em;font-size:11px}
-#robroHud .bar{width:140px;height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}
-#robroHud .bar i{display:block;height:100%;background:#f5c518;width:0}
-#robroHud[data-done=true] .live{background:#3ecf6e}
-#robroHud .muted{opacity:.7}
-#robroHud .sw{margin-left:auto;color:#f2f0e8;opacity:.8;font-size:12px;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:1px 7px}
-#robroHud .sw:hover{opacity:1;border-color:#f5c518}
-#robroHud .top{display:flex;align-items:center;gap:6px}
-#robroHud .think{font-size:12px;color:#f5c518;min-height:16px}
-#robroHud .ctl{display:flex;gap:4px}
-#robroHud .ctl button{font:700 12px/1 Overpass,system-ui,sans-serif;color:#f2f0e8;background:transparent;border:1px solid rgba(255,255,255,.22);border-radius:6px;padding:5px 0;cursor:pointer;flex:1;min-width:0}
-#robroHud .ctl button:hover{border-color:#f5c518}
-#robroHud .ctl button[aria-pressed=true]{background:#f5c518;color:#121418;border-color:#f5c518}
-#robroHud .lock{font-size:11px;opacity:.65;line-height:1.35}
+#robroHud{display:grid;gap:7px;flex:none;margin:12px;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--road);color:var(--paint);font:500 12px/1.4 var(--f-ui);overflow-wrap:anywhere}
+#robroHud .who{display:grid;gap:2px}#robroHud b{font-weight:800;font-size:15px}
+#robroHud .mono{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+#robroHud .live{color:var(--road);background:var(--yellow);border-radius:2px;padding:1px 6px;font-weight:800;letter-spacing:.06em;font-size:11px}
+#robroHud .bar{width:100%;height:6px;border-radius:1px;background:var(--line);overflow:hidden}
+#robroHud .bar i{display:block;height:100%;background:var(--yellow);width:0}
+#robroHud[data-done=true] .live{background:var(--green)}
+#robroHud .muted{color:var(--paint-2)}
+#robroHud .sw{display:inline-flex;align-items:center;min-height:32px;margin-left:auto;color:var(--paint);font-size:12px;font-weight:700;text-decoration:none;border:1px solid var(--line);border-radius:4px;padding:0 7px}
+#robroHud .sw:hover{border-color:var(--yellow)}
+#robroHud .top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+#robroHud .think{color:var(--yellow)}#robroHud .think:empty{display:none}
+#robroHud .ctl{display:flex;gap:3px}
+#robroHud .ctl button{height:32px;font:700 12px/1 var(--f-ui);color:var(--paint);background:var(--asphalt-2);border:1px solid var(--line);border-radius:4px;cursor:pointer;flex:1;min-width:0;padding:0}
+#robroHud .ctl button:hover{border-color:var(--yellow)}
+#robroHud .ctl button[aria-pressed=true]{background:var(--paint);color:var(--road);border-color:var(--paint)}
+#robroHud .lock{color:var(--muted)}
 #robroWhy[hidden]{display:none}
-#robroWhy{position:fixed;right:16px;bottom:16px;z-index:9998;width:min(400px,calc(100vw - 32px));max-height:38vh;display:flex;flex-direction:column;
-  border-radius:12px;background:rgba(18,20,24,.96);color:#f2f0e8;font:500 14px/1.4 Overpass,system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.12)}
-#robroWhy header{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.1)}
-#robroWhy header b{font-weight:800;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#robroWhy header button{font:700 12px/1 Overpass,system-ui,sans-serif;color:#f2f0e8;background:transparent;border:1px solid rgba(255,255,255,.22);border-radius:6px;padding:4px 8px;cursor:pointer}
-#robroWhy[data-min=true] .body{display:none}
-#robroWhy .body{overflow:auto;padding:4px 12px 10px}
-#robroWhy .turn{margin:8px 0;padding:8px 10px;border-radius:8px;background:rgba(245,197,24,.12);border-left:3px solid #f5c518}
-#robroWhy .turn small{display:block;font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:11px;color:#f5c518;margin-bottom:2px}
-#robroWhy ol{list-style:none;margin:0;padding:0}
-#robroWhy li{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08)}
-#robroWhy li:last-child{border-bottom:0}
-#robroWhy .what{display:flex;gap:8px;align-items:baseline}
-#robroWhy time{font:600 12px 'Overpass Mono',ui-monospace,monospace;opacity:.6}
-#robroWhy .why{margin-top:2px;color:#f2f0e8}
-#robroWhy .none{margin-top:2px;opacity:.55;font-style:italic}
-#robroWhy .empty{padding:10px 0;opacity:.65}`;
+#robroWhy{display:flex;flex-direction:column;flex:0 1 34%;min-height:0;margin:0 14px 12px;border:1px solid var(--line);border-radius:4px;background:var(--road);color:var(--paint);font:500 13px/1.4 var(--f-ui);overflow:hidden;overflow-wrap:anywhere}
+#robroWhy header{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px dashed var(--line);flex:none}
+#robroWhy header b{font-size:12px;font-weight:800;flex:1;min-width:0;color:var(--yellow)}
+#robroWhy header button{height:32px;font:700 12px/1 var(--f-ui);color:var(--paint);background:var(--asphalt-2);border:1px solid var(--line);border-radius:4px;padding:0 8px;cursor:pointer}
+#robroWhy[data-min=true]{flex:none}#robroWhy[data-min=true] .body{display:none}
+#robroWhy .body{overflow:auto;min-height:0;padding:0 10px 8px}
+#robroWhy .turn{margin:8px 0;padding:8px 10px;background:var(--asphalt-2);border-left:3px solid var(--yellow)}
+#robroWhy .turn small{display:block;font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:11px;color:var(--yellow);margin-bottom:2px}
+#robroWhy ol{list-style:none;margin:0;padding:0}#robroWhy li{padding:8px 0;border-bottom:1px solid var(--line)}#robroWhy li:last-child{border-bottom:0}
+#robroWhy .what{display:flex;gap:8px;align-items:baseline}#robroWhy .what b{min-width:0}
+#robroWhy time{flex:none;font:600 12px var(--f-num);color:var(--muted)}
+#robroWhy .why{margin-top:3px;color:var(--paint-2)}#robroWhy .none{margin-top:3px;color:var(--muted)}#robroWhy .empty{padding:10px 0;color:var(--muted)}
+body[data-live=true] .fleet .cars{flex:1}
+body[data-live=true] button:disabled{cursor:not-allowed}
+body[data-live=true] #pause,body[data-live=true] [aria-label="Simulation speed"],body[data-live=true] .ctrls .switch,body[data-live=true] .tools,
+body[data-live=true] .agent .off-only,body[data-live=true] #tune,body[data-live=true] #connect,body[data-live=true] #handshake{display:none}
+body[data-live=true] .agent-id{display:grid}
+body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
+@media(max-width:1100px){#robroWhy{flex:none;max-height:360px}#robroHud{margin:12px 14px}}
+@media(min-width:861px) and (max-width:1100px){body[data-live=true] .center{grid-template-rows:auto minmax(420px,64vh)}}
+@media(max-width:860px){body[data-live=true] main{grid-template-areas:"center" "fleet" "agent"}body[data-live=true] .center{grid-template-rows:auto auto}}
+@media(pointer:coarse),(max-width:560px){#robroHud .ctl{flex-wrap:wrap}#robroHud .ctl button{height:44px;flex:1 0 28%}#robroHud .sw,#robroWhy header button{min-height:44px}}
+`;
   document.head.append(css);
   const hud = document.createElement('div'); hud.id = 'robroHud';
   hud.innerHTML = '<span class="top"><span class="live">LIVE</span> <span class="mono time muted"></span><a class="sw"></a></span><span class="who">Connecting to HQ…</span><span class="mono rev"></span><span class="bar"><i></i></span><span class="think"></span><span class="ctl" role="group" aria-label="Playback speed"></span><span class="lock">Speed and pause only change the view, never the score. Other settings are locked so every model plays the same day.</span>';
-  document.body.append(hud);
+  document.body.dataset.live = 'true';
+  document.querySelector('.fleet .stripe').after(hud);
   const $h = (s) => hud.querySelector(s);
   const sw = $h('.sw'); sw.textContent = is3d ? 'View 2D' : 'View 3D'; sw.href = (is3d ? '/view/2d' : '/view/3d') + location.search;
   const money = (x) => '$' + Math.round(x).toLocaleString('en-US');
@@ -67,16 +120,21 @@
     for (const [v, l] of [[0.25, '¼×'], [0.5, '½×'], [1, '1×'], [2, '2×'], [4, '4×']]) mk(l, ctl.speed === v, () => setCtl('speed=' + v), 'Playback speed');
   }
   drawCtl();
-  const LOCK = 'Locked in a live model game: this would change the day the model is playing, so scores would stop being comparable. Playback speed and pause (bottom left) are free.';
-  document.querySelectorAll('#connect, .tool, #reseed, #seedIn, #clearInc, #rush, #randomInc, #pause, [data-speed], #wEff, #wBat, #wRr').forEach((el) => { el.title = LOCK; });
+  const LOCK = 'Locked in a live model game: this would change the day the model is playing, so scores would stop being comparable. Playback speed and pause in the Fleet rail are free.';
+  const LOCKED_CONTROLS = '#connect, #agentUrl, .tool, #reseed, #seedIn, #clearInc, #rush, #randomInc, #pause, [data-speed], #wEff, #wBat, #wRr';
+  function lockViewerControls() {
+    document.querySelectorAll(LOCKED_CONTROLS).forEach((el) => { el.disabled = true; el.title = LOCK; el.style.opacity = '.45'; });
+  }
+  lockViewerControls();
 
   // reasoning panel: every decision with the model's own reason, plus its per-turn notes
   const why = document.createElement('aside'); why.id = 'robroWhy'; why.setAttribute('aria-label', 'Dispatcher reasoning');
   why.innerHTML = '<header><b>Why: waiting for the model</b><button type="button">Hide</button></header><div class="body"><div class="empty">Decisions and the reasons the model gives will appear here.</div></div>';
-  document.body.append(why);
+  document.querySelector('.agentrail .agent').after(why);
   const whyBody = why.querySelector('.body'), whyBtn = why.querySelector('button');
-  whyBtn.addEventListener('click', () => { const m = why.dataset.min !== 'true'; why.dataset.min = String(m); whyBtn.textContent = m ? 'Show' : 'Hide'; });
-  let external = false; const feed = []; let lastNote = null, lastMsg = performance.now(), finished = false;
+  whyBtn.setAttribute('aria-expanded', 'true');
+  whyBtn.addEventListener('click', () => { const m = why.dataset.min !== 'true'; why.dataset.min = String(m); whyBtn.textContent = m ? 'Show' : 'Hide'; whyBtn.setAttribute('aria-expanded', String(!m)); });
+  let external = false; const feed = []; let lastNote = null, lastMsg = performance.now(), finished = false, resyncedUntil = 0;
   const clk = (t) => String(Math.floor(t / 3600) % 24).padStart(2, '0') + ':' + String(Math.floor(t / 60) % 60).padStart(2, '0');
   function takeEvents(evs, meta) {
     let changed = false;
@@ -100,26 +158,32 @@
     }
     whyBody.append(ol);
   }
-  // when no update arrives, the sim is paused while the model thinks (the score counts sim time, not thinking time)
   setInterval(() => {
-    const el = $h('.think'); if (finished || !external) { el.textContent = ''; return; }
-    const idle = (performance.now() - lastMsg) / 1000;
-    el.textContent = ctl.paused ? 'Paused by you' : idle > 1.5 ? `Dispatcher thinking… ${Math.floor(idle)}s (game clock stopped)` : '';
+    const el = $h('.think'); if (finished) { el.textContent = ''; return; }
+    const now = performance.now(), idle = (now - lastMsg) / 1000;
+    const buffered = (playback.sourceTime ?? 0) - (playback.time ?? 0);
+    el.textContent = ctl.paused ? 'Paused by you' : now < resyncedUntil ? 'Viewer caught up after the playback buffer filled' : buffered > 0.1 ? `Playing accepted moves · ${Math.ceil(buffered)}s buffered` : external && idle > 1.5 ? 'Caught up · dispatcher thinking (ranked clock paused)' : '';
   }, 500);
 
-  /* ---- smooth motion: the server sends about 10 updates a second; between them each car glides
-     along its route at the display frame rate, and corners are rounded ---- */
-  const motion = new Map(); // car id -> { path, cum, from, to, t0, dur, ang, off }
-  let lastAt = 0, gap = 120;
+  const motion = new Map();
+  const trafficMotion = new Map();
   const sameArr = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
   const cumOf = (path) => { const c = [0]; for (let i = 1; i < path.length; i++) c.push(c[i - 1] + (H.E(path[i - 1], path[i])?.len || 0)); return c; };
   const segAt = (cum, d) => { let i = 0; while (i < cum.length - 2 && cum[i + 1] <= d) i++; return i; };
-  function retarget(m, sc, now) {
+  function retarget(m, sc, now, duration) {
     const P = sc.path, cumP = cumOf(P), dT = cumP[Math.min(sc.seg, P.length - 1)] + (sc.seg < P.length - 1 ? sc.prog : 0);
     const cur = m.from + (m.to - m.from) * Math.min(1, (now - m.t0) / m.dur);
     let path = P, cum = cumP, from = dT, to = dT;
     if (sameArr(m.path, P)) { if (dT >= cur - 0.5) from = cur; }
     else if (m.path.length) {
+      const overlap = m.path.findIndex((_, i) => m.path.length - i <= P.length && m.path.slice(i).every((n, j) => n === P[j]));
+      if (overlap >= 0) {
+        const offset = m.cum[overlap];
+        if (cur >= offset) from = Math.min(cur - offset, dT);
+        else { path = m.path.slice(0, overlap).concat(P); cum = cumOf(path); from = cur; to = offset + dT; }
+        Object.assign(m, { path, cum, from, to, t0: now, dur: duration });
+        return;
+      }
       // find where the car is drawn now on the new route, or join the old route onto it
       const i = segAt(m.cum, cur), q = cur - m.cum[i], A = m.path[i], B = m.path[i + 1], atNode = q < 0.01 || B == null;
       const node = atNode ? A : (q >= m.cum[i + 1] - m.cum[i] - 0.01 ? B : null);
@@ -132,7 +196,7 @@
         if (j >= 0) { path = m.path.slice(0, j).concat(P); cum = cumOf(path); from = cur; to = cum[j] + dT; }
       }
     }
-    Object.assign(m, { path, cum, from, to, t0: now, dur: Math.min(1000, gap * 1.15) });
+    Object.assign(m, { path, cum, from, to, t0: now, dur: duration });
   }
   // pose at distance d along m.path: follows each road's real polyline, with corners rounded
   const LANE = 0.45; // right-hand lane offset in map units; the page adds it itself while a car is moving
@@ -158,7 +222,7 @@
     return corner(i) || corner(i + 1) || p;
   }
   function place(c, m, now, dt) {
-    const d = m.from + (m.to - m.from) * Math.min(1, (now - m.t0) / m.dur);
+    const d = m.from + (m.to - m.from) * Math.max(0, Math.min(1, (now - m.t0) / m.dur));
     const p = poseOf(m, d);
     const moving = !!p && d < m.cum[m.cum.length - 1] - 0.01;
     if (p) m.ang = p.ang;
@@ -172,41 +236,86 @@
     c.livePos = { x: x - Math.sin(a) * k, y: y + Math.cos(a) * k, ang: m.ang ?? c.ang };
     c.path = m.path; c.seg = moving ? i : m.path.length - 1; c.prog = moving ? d - m.cum[i] : 0;
   }
-  let lastFrame = performance.now();
+  function prepareMotion(base, next) {
+    const betweenSnapshots = (sc, previous, target, preservePlan) => {
+      const path = sc.path.slice(), cum = cumOf(path), d = cum[Math.min(sc.seg, path.length - 1)] + (sc.seg < path.length - 1 ? sc.prog : 0);
+      const m = { path, cum, from: d, to: d, t0: base.snap.t * 1000, dur: 1, ang: previous?.ang ?? sc.ang, off: previous?.off ?? 0 };
+      if (!target || next.snap.t <= base.snap.t || sc.roadActive === false) return m;
+      const candidate = { ...m };
+      retarget(candidate, target, m.t0, (next.snap.t - base.snap.t) * 1000);
+      if (preservePlan && !sameArr(candidate.path, path)) return m;
+      const a = poseOf(m, d) || H.nodes[path[0]], b = poseOf(candidate, candidate.from) || H.nodes[candidate.path[0]];
+      return Math.hypot(a.x - b.x, a.y - b.y) < 0.1 ? candidate : m;
+    };
+    for (const [key, map] of [['cars', motion], ['traffic', trafficMotion]]) {
+      const source = key === 'cars' ? base.snap.cars : base.snap.traffic?.vehicles || [];
+      const target = new Map((key === 'cars' ? next?.snap.cars || [] : next?.snap.traffic?.vehicles || []).map(sc => [sc.id, sc]));
+      const ids = new Set(source.map(sc => sc.id));
+      for (const sc of source) map.set(sc.id, betweenSnapshots(sc, map.get(sc.id), target.get(sc.id), key === 'cars'));
+      for (const id of map.keys()) if (!ids.has(id)) map.delete(id);
+    }
+  }
+  function drawTime(snap, time) {
+    const sc = snap.score, elapsed = sc.elapsedMin + (time - snap.t) / 60;
+    const label = sc.finished ? `finished in ${(sc.finishMin / 60).toFixed(2)} h` : sc.outOfTime ? 'out of time' : `${Math.floor(elapsed / 60)}h ${String(Math.floor(elapsed % 60)).padStart(2, '0')}m`;
+    if ($h('.time').textContent !== label) $h('.time').textContent = label;
+    const clock = document.getElementById('clock'); if (clock && clock.textContent !== clk(time)) clock.textContent = clk(time);
+  }
+  let lastFrame = performance.now(), preparedBase = null, preparedNext = null;
   function animate(now) {
     const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
-    const S = H.main();
-    for (const c of S.cars) { const m = motion.get(c.id); if (m) place(c, m, now, dt); }
+    const frame = playback.step(now, { ...ctl, hidden: document.hidden });
+    playbackStatus.paused = ctl.paused;
+    if (frame.resynced) playbackStatus.revision++;
+    for (const packet of frame.due) apply(packet.meta, packet.snap);
+    if (frame.base) {
+      const S = H.main();
+      if (frame.base !== preparedBase || frame.next !== preparedNext) {
+        prepareMotion(frame.base, frame.next); preparedBase = frame.base; preparedNext = frame.next;
+      }
+      S.t = frame.time;
+      for (const c of S.cars) { const m = motion.get(c.id); if (m) place(c, m, frame.time * 1000, ctl.paused ? 0 : dt); }
+      for (const v of S.traffic?.vehicles || []) { const m = trafficMotion.get(v.id); if (m) place(v, m, frame.time * 1000, ctl.paused ? 0 : dt); }
+      for (const e of frame.events) { if (e.kind === 'fare') continue; S.t = e.t; H.log(e); }
+      S.t = frame.time;
+      takeEvents(frame.events, frame.base.meta);
+      drawTime(frame.base.snap, frame.time);
+      if (frame.resynced) resyncedUntil = now + 5000;
+    }
     requestAnimationFrame(animate);
   }
   requestAnimationFrame(animate);
 
-  function sync(W, d, smooth) {
+  function sync(W, d) {
     const reqMap = new Map(), now = performance.now();
     W.reqs = d.reqs.map((r) => { const o = { ...r, car: null }; reqMap.set(o.id, o); return o; });
     for (const sc of d.cars) {
       const c = W.cars.find((x) => x.id === sc.id); if (!c) continue;
       if (c.routeVer !== sc.routeVer) c.drawT = now;
-      Object.assign(c, { state: sc.state, battery: sc.battery, chargeTo: sc.chargeTo, plugged: sc.plugged,
+      Object.assign(c, { state: sc.state, roadActive: sc.roadActive, battery: sc.battery, chargeTo: sc.chargeTo, plugged: sc.plugged,
         queueT: sc.queueT, holdUntil: sc.holdUntil, strandUntil: sc.strandUntil, routeVer: sc.routeVer });
-      if (smooth) {
-        let m = motion.get(sc.id);
-        if (!m) { m = { path: [], cum: [0], from: 0, to: 0, t0: now, dur: 1, ang: c.ang, off: 0 }; motion.set(sc.id, m); }
-        retarget(m, sc, now); place(c, m, now, 0);
-      } else { delete c.livePos; Object.assign(c, { path: sc.path, seg: sc.seg, prog: sc.prog, x: sc.x, y: sc.y }); }
+      c.parkNode = sc.roadActive === false ? sc.path[sc.seg] : null;
+      delete c.livePos; Object.assign(c, { path: sc.path, seg: sc.seg, prog: sc.prog, x: sc.x, y: sc.y });
       c.depot = H.DEPOTS.find((x) => x.name === sc.depot) || null;
       c.job = sc.job ? reqMap.get(sc.job) || null : null; if (c.job) c.job.car = c;
       c.next = sc.next ? reqMap.get(sc.next) || null : null; if (c.next) c.next.car = c;
       c.known = new Set(sc.known);
     }
+    const previous = new Map((W.traffic?.vehicles || []).map((v) => [v.id, v]));
+    W.traffic = { vehicles: (d.traffic?.vehicles || []).map((sc) => {
+      const v = previous.get(sc.id) || { ...sc };
+      delete v.livePos; Object.assign(v, sc);
+      return v;
+    }) };
   }
   let announced = false;
   function apply(meta, snap) {
-    lastMsg = performance.now(); finished = !!(snap.score.finished || snap.score.outOfTime); external = meta.mode === 'external'; why.hidden = !external;
+    finished = !!(snap.score.finished || snap.score.outOfTime); external = meta.mode === 'external'; why.hidden = !external;
+    if (!announced) document.getElementById('feed').replaceChildren();
+    H.setSeed(meta.seed);
     const S = H.main();
     Object.assign(S, { t: snap.t, agent: snap.agent, agentSince: snap.agentSince, connectT: snap.connectT, rph: snap.rph, hazIdx: snap.hazIdx, rush: snap.rush, paused: false });
-    const at = performance.now(); if (lastAt && at - lastAt < 1500) gap = gap * 0.8 + (at - lastAt) * 0.2; lastAt = at;
-    sync(S, snap, true);
+    sync(S, snap);
     S.periods = snap.periods; S.waitSeries = snap.waitSeries;
     if (snap.shadow) {
       if (!H.shadow()) H.setShadow(H.cloneWorld(S));
@@ -215,17 +324,12 @@
     S.incidents.length = 0;
     for (const i of snap.incidents) S.incidents.push({ ...i, edge: H.edges[i.edge] });
     H.recomputeTraffic();
-    const now = S.t;
-    for (const e of snap.events) { if (e.kind === 'fare') continue; S.t = e.t; H.log(e); }
-    S.t = now;
     H.setAgentUI();
+    lockViewerControls();
     // HUD
-    takeEvents(snap.events, meta);
     const sc = snap.score;
     if (!announced) {
       announced = true; document.title = `${meta.player} · ${meta.model} · RobroTaxi live`;
-      // the page's own controls would fork the local world from the server's, so they are switched off
-      document.querySelectorAll('#connect, .tool, #reseed, #seedIn, #clearInc, #rush, #randomInc, #pause, [data-speed], #wEff, #wBat, #wRr').forEach((el) => { el.disabled = true; el.style.opacity = '.45'; });
       const set = (sel, text) => { const el = document.getElementById(sel); if (el) { if ('value' in el && el.tagName === 'INPUT') el.value = text; else el.textContent = text; } };
       set('seedIn', String(meta.seed));
       set('seedLabel', `Seed ${meta.seed} · about ${snap.rph} riders/hr · live from HQ`);
@@ -236,13 +340,11 @@
     $h('.who b').textContent = meta.player; $h('.who .muted').textContent = `${meta.model} · seed ${meta.seed}${meta.ranked ? ' ranked' : ''}`;
     $h('.rev').textContent = `${money(sc.revenue)} / $1,000,000`;
     $h('.bar i').style.width = Math.max(0, Math.min(100, sc.progress * 100)).toFixed(1) + '%';
-    const h = Math.floor(sc.elapsedMin / 60), m = Math.floor(sc.elapsedMin % 60);
-    $h('.time').textContent = sc.finished ? `finished in ${(sc.finishMin / 60).toFixed(2)} h` : sc.outOfTime ? 'out of time' : `${h}h ${String(m).padStart(2, '0')}m`;
     hud.dataset.done = String(!!sc.finished);
     $h('.live').textContent = sc.finished ? 'FINISHED' : sc.outOfTime ? 'ENDED' : 'LIVE';
   }
 
   const es = new EventSource(`/live/${encodeURIComponent(id)}/stream`);
-  es.onmessage = (ev) => { try { const { meta, snap, ctl: c } = JSON.parse(ev.data); if (c && (c.speed !== ctl.speed || c.paused !== ctl.paused)) { ctl = c; drawCtl(); } apply(meta, snap); } catch (err) { console.error('live update failed', err); } };
+  es.onmessage = (ev) => { try { const packet = JSON.parse(ev.data), c = packet.ctl; lastMsg = performance.now(); if (c && (c.speed !== ctl.speed || c.paused !== ctl.paused)) { ctl = c; drawCtl(); } playback.push(packet, ev.data.length * 2); } catch (err) { console.error('live update failed', err); } };
   es.onerror = () => { $h('.live').textContent = 'OFFLINE'; };
 })();
