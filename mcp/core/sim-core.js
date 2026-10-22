@@ -675,26 +675,48 @@ const TRAFFIC_MODELS = [
   { model: 'suv', length: 0.5 }, { model: 'van', length: 0.58 }, { model: 'bus', length: 1.1 },
 ];
 const TRAFFIC_COLORS = ['#d6d9dd', '#283b50', '#9a4140', '#52746a', '#a5aab0', '#c5b89b', '#33424d', '#dfdfd4'];
+let trafficNetwork = null;
+function trafficRoads() {
+  if (trafficNetwork) return trafficNetwork;
+  const neighbors = nodes.map(() => new Set());
+  for (const e of edges) { neighbors[e.a].add(e.b); neighbors[e.b].add(e.a); }
+  const active = nodes.map(() => true), queue = [];
+  neighbors.forEach((out, i) => { if (out.size < 2) queue.push(i); });
+  for (let i = 0; i < queue.length; i++) {
+    const at = queue[i];
+    if (!active[at]) continue;
+    active[at] = false;
+    for (const to of neighbors[at]) {
+      neighbors[to].delete(at);
+      if (active[to] && neighbors[to].size < 2) queue.push(to);
+    }
+  }
+  // Destination-free traffic circulates on through streets instead of touring terminal courts.
+  const through = adj.map((out, at) => out.filter(({ to }) => active[at] && active[to]));
+  trafficNetwork = through.some((out) => out.length) ? through : adj;
+  return trafficNetwork;
+}
 function trafficHash(seed, id, step) {
   let n = Math.imul(seed ^ Math.imul(id + 1, 0x9e3779b1), 0x85ebca6b) ^ Math.imul(step + 1, 0xc2b2ae35);
   n = Math.imul(n ^ n >>> 16, 0x7feb352d); n = Math.imul(n ^ n >>> 15, 0x846ca68b);
   return (n ^ n >>> 16) >>> 0;
 }
 function extendTrafficRoute(v, traffic) {
+  const network = trafficRoads();
   while (v.path.length - v.seg < 16) {
     const at = v.path[v.path.length - 1], prev = v.path[v.path.length - 2];
-    const choices = adj[at].filter(({ to }) => to !== prev);
-    const exits = choices.length ? choices : adj[at];
+    const choices = network[at].filter(({ to }) => to !== prev);
+    const exits = choices.length ? choices : network[at];
     if (!exits.length) break;
     v.path.push(exits[trafficHash(traffic.seed, v.index, v.turn++) % exits.length].to);
   }
 }
 function initTraffic(world, seed) {
   const traffic = world.traffic = { vehicles: [], locks: {}, ghosts: [], clock: world.t, seed, remainder: 0 };
-  const lanes = [];
+  const lanes = [], network = trafficRoads();
   for (const e of edges) if (e.len >= 3) {
-    if (E(e.a, e.b) === e) lanes.push({ a: e.a, b: e.b, e });
-    if (!e.oneway && E(e.b, e.a) === e) lanes.push({ a: e.b, b: e.a, e });
+    if (E(e.a, e.b) === e && network[e.a].some(({ to }) => to === e.b)) lanes.push({ a: e.a, b: e.b, e });
+    if (!e.oneway && E(e.b, e.a) === e && network[e.b].some(({ to }) => to === e.a)) lanes.push({ a: e.b, b: e.a, e });
   }
   lanes.sort((a, b) => trafficHash(seed, a.e.id, a.a) - trafficHash(seed, b.e.id, b.a) || a.a - b.a || a.b - b.b);
   for (let i = 0; i < Math.min(240, lanes.length); i++) {

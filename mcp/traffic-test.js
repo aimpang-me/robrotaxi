@@ -219,6 +219,24 @@ test('the real city keeps legal disjoint bodies through repeated edge transition
   snapshot.traffic.vehicles[0].path.push(-1);
   assert(!f.world.traffic.vehicles[0].path.includes(-1));
 });
+test('ambient circulation skips terminal courts while taxis can still serve them', () => {
+  const map = json(graph);
+  map.nodes = [[0, 0], [10, 0], [10, 10], [0, 10], [20, 0], [30, 0]];
+  map.edges = [[0, 1], [1, 2], [2, 3], [3, 0], [1, 4], [4, 5]].map(([a, b]) => [a, b, 0, 50, 0, []]);
+  const f = fixture(false, map); f.init(2207);
+  assert.equal(f.world.traffic.vehicles.length, 8, 'both directions of the four through roads are populated');
+  const taxi = f.add('T-01', [0, 1, 4, 5], 0, { roadActive: false });
+  for (let i = 0; i < 240; i++) {
+    f.move(); assertBodies(f);
+    for (const v of f.world.traffic.vehicles) assert(v.path.every((n) => n < 4), 'ambient route extensions stay out of the whole terminal branch');
+  }
+  assert.equal(taxi.state, 'idle'); assert.equal(taxi.path[taxi.seg], 5, 'taxi destination routes still reach the terminal court');
+});
+test('a road network without a through circuit retains legal ambient traffic', () => {
+  const f = fixture(); f.init(1101);
+  assert(f.world.traffic.vehicles.length > 0, 'tree-only fixtures use the legal network fallback');
+  for (let i = 0; i < 20; i++) { f.move(); assertBodies(f); }
+});
 test('dispatch, pickups, dropoffs and road traffic share disjoint road occupancy', () => {
   const context = vm.createContext({ console }); new vm.Script(source).runInContext(context);
   context.API.gameInit({ seed: 3313, mode: 'scripted', demand: 2, hours: 24, shadow: false });
