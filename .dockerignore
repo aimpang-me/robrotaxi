@@ -1,8 +1,11 @@
 *
 !index.html
 !index-3d.html
+!cybercab.glb
 !map
 !map/toronto.js
+!vendor
+!vendor/**
 !mcp
 !mcp/**
 mcp/node_modules

@@ -4,8 +4,9 @@ FROM node:22-alpine
 WORKDIR /app
 COPY mcp/package.json mcp/package-lock.json mcp/
 RUN cd mcp && npm ci --omit=dev --no-audit --no-fund
-COPY index.html index-3d.html ./
+COPY index.html index-3d.html cybercab.glb ./
 COPY map/toronto.js map/
+COPY vendor/ vendor/
 COPY mcp/ mcp/
 # Proxy trust is platform-specific: set ROBRO_TRUST_PROXY=cloudflare on Cloudflare Containers and
 # ROBRO_TRUST_PROXY=fly on Fly. A plain Docker host must not trust client-supplied X-Forwarded-For.
