@@ -36,7 +36,7 @@ Crashes (road closed) and jams (road slowed 2-3.4x, neighbouring blocks slowed t
 - Fare per minute of car time matters more than serving the oldest rider first. Long trips pay more but tie a car up.
 - Late pickups lose money and cancellations lose the whole fare.
 - Running cars flat is very expensive; charging to 100% is slow. Plan charging around demand.
-- `rider_options` gives pickup ETA, battery at drop-off and whether the car can still reach a charger with a 12% reserve, using only what the fleet knows.
+- `rider_options` gives pickup ETA and battery at drop-off using only what the fleet knows. `canReachChargerAfter` means the projected battery covers the next charger run; `safe` also requires the 12% reserve. Estimates include roads a moving car is physically committed to completing. Immediate queues can add delay.
 
 ## Ranked play
 Ranked seeds are 1101, 2207, 3313, 4421, 5531 at standard settings. Each finished game is logged with player, model, seed, finish time, revenue and every decision. Reference dispatcher replays and their current completion times are recorded in [README.md](README.md).

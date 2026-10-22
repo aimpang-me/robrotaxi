@@ -226,21 +226,30 @@ function weightFor(car) {
   if (S.agent) return timeW;
   return (e) => (car.known.has(e.id) ? Infinity : e.len); // executor alone: shortest road, no live incident feed
 }
-function planFrom(car, to, w = weightFor(car)) {
+function committedRouteStart(car) {
   if (car.prog > 0 || car.roadActive !== false && car.seg < car.path.length - 1) {
     let end = car.seg + 1, front = roadLength(car) / 2 - (E(car.path[car.seg], car.path[end]).len - car.prog);
     while (front > 0 && end < car.path.length - 1) { front -= E(car.path[end], car.path[end + 1]).len; end++; }
-    const r = dijkstra(car.path[end], to, w); if (!r) return null;
-    return { path: [...car.path.slice(car.seg, end), ...r.path], seg: 0, prog: car.prog };
+    return { prefix: car.path.slice(car.seg, end), node: car.path[end], prog: car.prog };
   }
-  const r = dijkstra(car.path[car.seg], to, w); if (!r) return null;
-  return { path: r.path, seg: 0, prog: 0 };
+  return { prefix: [], node: car.path[car.seg], prog: 0 };
+}
+function routeFrom(car, suffixFrom) {
+  const start = committedRouteStart(car), suffix = suffixFrom(start.node);
+  return suffix ? { path: start.prefix.concat(suffix), seg: 0, prog: start.prog } : null;
+}
+function planFrom(car, to, w = weightFor(car)) {
+  return routeFrom(car, node => dijkstra(node, to, w)?.path);
 }
 function setRoute(car, plan) {
   car.path = plan.path; car.seg = plan.seg; car.prog = plan.prog;
   car.routeVer++; car.drawT = 0;
 }
 function remaining(car) { return pathStats(car.path.slice(car.seg), car.prog); }
+function stopAfterBlock(car) {
+  setRoute(car, routeFrom(car, node => [node]));
+  car.state = car.path.length > 1 ? 'reposition' : 'idle';
+}
 function sendTo(car, to, state) {
   const plan = planFrom(car, to);
   car.state = state;
@@ -262,8 +271,7 @@ function strand(car) {
   const p = P(); p.stranded++; p.tows = (p.tows || 0) + 1;
   const was = car.state;
   car.state = 'stranded'; car.strandUntil = S.t + 240;
-  if (car.prog > 0) { car.path = [car.path[car.seg], car.path[car.seg + 1]]; } else { car.path = [car.path[car.seg]]; }
-  car.seg = 0; car.routeVer++;
+  setRoute(car, routeFrom(car, node => [node]));
   if (car.next) { car.next.status = 'waiting'; car.next.car = null; car.next = null; }
   let body = 'Tow truck dispatched. Back at the nearest depot in about 4 min.';
   if (car.job) {
@@ -388,6 +396,11 @@ function bestDepotByTime(n, battery = Infinity) {
   }
   return best;
 }
+function bestDepotFor(car) {
+  const start = committedRouteStart(car), lead = pathStats(start.prefix.concat(start.node), start.prog);
+  const best = bestDepotByTime(start.node, car.battery - lead.pct);
+  return best ? { ...best, cost: best.cost + lead.t, st: { t: best.st.t + lead.t, px: best.st.px + lead.px, pct: best.st.pct + lead.pct } } : null;
+}
 
 /* ---------------- requests ---------------- */
 function spawnRequest(from, to, mine = false) {
@@ -446,10 +459,7 @@ function agentDispatchAll() {
       if (chained) {
         lead = remaining(c); if (!(lead.t < 300)) continue;
         start = targetOf(c); path = pathTo(tree, start); if (!path) continue;
-      } else if (c.prog > 0) {
-        const cur = c.path[c.seg], nxt = c.path[c.seg + 1];
-        const p = pathTo(tree, nxt); if (!p) continue; path = [cur, ...p];
-      } else { path = pathTo(tree, c.path[c.seg]); if (!path) continue; }
+      } else { const plan = routeFrom(c, node => pathTo(tree, node)); if (!plan) continue; path = plan.path; }
       const a0 = pathStats(path, chained ? 0 : c.prog);
       const a = { t: a0.t + lead.t, px: a0.px, pct: a0.pct };
       const startBat = c.battery - lead.pct;
@@ -524,7 +534,7 @@ function agentCharge() {
     if (c.battery >= threshold) continue;
     // stay out for the queue only if this car can still take one of those rides safely; otherwise it would sit idle forever
     if (waiting > 0 && c.battery > 15 && free.length <= waiting && canServeAny(c)) continue;
-    const b = bestDepotByTime(carNode(c), c.battery); if (!b) continue;
+    const b = bestDepotFor(c); if (!b) continue;
     c.depot = b.d; c.chargeTo = waiting > 2 ? 75 : 90;
     sendTo(c, b.d.node, 'tocharge');
     const idleNow = S.cars.filter((x) => x.state === 'idle').length;
@@ -549,7 +559,7 @@ function agentReroute(reason) {
     const after = c.state === 'tocharge' ? 0 : (bestDepotByTime(targetOf(c))?.st.pct ?? 6);
     if (c.battery - alt.pct - after < RESERVE / 2 && c.state !== 'riding' && c.state !== 'tocharge') {
       // the detour would leave too little to reach a charger: give the job back and charge instead
-      const b = bestDepotByTime(carNode(c), c.battery); if (!b) continue;
+      const b = bestDepotFor(c); if (!b) continue;
       if (c.job) { c.job.status = 'waiting'; c.job.car = null; c.job = null; }
       if (c.next) { c.next.status = 'waiting'; c.next.car = null; c.next = null; }
       c.depot = b.d; c.chargeTo = 90; sendTo(c, b.d.node, 'tocharge'); n++;
@@ -908,7 +918,7 @@ function step(dt) {
     if ((r.status === 'waiting' || r.status === 'assigned') && S.t - r.t0 > CANCEL_AFTER && !r.vip && !r.rescue) {
       r.status = 'cancelled'; P().cancelled++; P().lostFares = (P().lostFares || 0) + fareOf(r);
       if (r.car && r.car.next === r) { r.car.next = null; }
-      else if (r.car) { const c = r.car; c.job = null; if (c.prog > 0) { c.path = [c.path[c.seg], c.path[c.seg + 1]]; c.seg = 0; c.state = 'reposition'; } else { c.path = [c.path[c.seg]]; c.seg = 0; c.state = 'idle'; } c.routeVer++; }
+      else if (r.car) { const c = r.car; c.job = null; stopAfterBlock(c); }
       log({ src: 'exec', kind: 'hold', tag: 'Cancelled', head: `${r.id} ${r.name} gave up after 15 min` });
     }
   }
@@ -1062,8 +1072,7 @@ function options(riderId, limit = 4) {
     if (!usableCar(c) || c === r.car) continue;
     let path, lead = { t: 0, pct: 0 }; const chained = c.state === 'riding';
     if (chained) { lead = remaining(c); path = pathTo(tree, targetOf(c)); }
-    else if (c.prog > 0) { const p = pathTo(tree, c.path[c.seg + 1]); path = p && [c.path[c.seg], ...p]; }
-    else path = pathTo(tree, c.path[c.seg]);
+    else path = routeFrom(c, node => pathTo(tree, node))?.path;
     if (!path) continue;
     const a = pathStats(path, chained ? 0 : c.prog);
     const pickT = a.t + lead.t + (c.state === 'charging' || c.state === 'tocharge' ? 0 : 0);
@@ -1078,9 +1087,7 @@ function options(riderId, limit = 4) {
 /* ---------- actions (the model's levers) ---------- */
 function say(kind, tag, head, reason) { EVENTS.push({ t: S.t, src: 'agent', kind, tag, head, body: reason || undefined, model: true }); }
 function freeUp(c) {
-  // stop a car where it is: finish the current block if mid-road
-  if (c.prog > 0) { c.path = [c.path[c.seg], c.path[c.seg + 1]]; c.seg = 0; c.state = 'reposition'; } else { c.path = [carNode(c)]; c.seg = 0; c.prog = 0; c.state = 'idle'; }
-  c.routeVer++;
+  stopAfterBlock(c);
 }
 function unassign(r) {
   if (!r.car) return;
@@ -1119,7 +1126,7 @@ function actCharge(carId, depot, chargeTo = 90, reason) {
   if (c.next) unassign(c.next);
   if (c.job) unassign(c.job);
   let d = depotBy(depot), drive;
-  if (!d) { const b = bestDepotByTime(carNode(c), c.battery); if (!b) throw new Error(`${c.id} cannot reach a depot on ${r1(c.battery)}% by any known route.`); d = b.d; drive = b.st; }
+  if (!d) { const b = bestDepotFor(c); if (!b) throw new Error(`${c.id} cannot reach a depot on ${r1(c.battery)}% by any known route.`); d = b.d; drive = b.st; }
   c.depot = d; c.chargeTo = Math.max(10, Math.min(100, +chargeTo || 90));
   if (!sendTo(c, d.node, 'tocharge')) throw new Error(`No known route to ${d.name} right now; the car will retry in 30 s.`);
   if (c.path.length === 1) arrive(c);

@@ -126,8 +126,7 @@ function options(riderId, limit = 4) {
     if (!usableCar(c) || c === r.car) continue;
     let path, lead = { t: 0, pct: 0 }; const chained = c.state === 'riding';
     if (chained) { lead = remaining(c); path = pathTo(tree, targetOf(c)); }
-    else if (c.prog > 0) { const p = pathTo(tree, c.path[c.seg + 1]); path = p && [c.path[c.seg], ...p]; }
-    else path = pathTo(tree, c.path[c.seg]);
+    else path = routeFrom(c, node => pathTo(tree, node))?.path;
     if (!path) continue;
     const a = pathStats(path, chained ? 0 : c.prog);
     const pickT = a.t + lead.t + (c.state === 'charging' || c.state === 'tocharge' ? 0 : 0);
@@ -142,9 +141,7 @@ function options(riderId, limit = 4) {
 /* ---------- actions (the model's levers) ---------- */
 function say(kind, tag, head, reason) { EVENTS.push({ t: S.t, src: 'agent', kind, tag, head, body: reason || undefined, model: true }); }
 function freeUp(c) {
-  // stop a car where it is: finish the current block if mid-road
-  if (c.prog > 0) { c.path = [c.path[c.seg], c.path[c.seg + 1]]; c.seg = 0; c.state = 'reposition'; } else { c.path = [carNode(c)]; c.seg = 0; c.prog = 0; c.state = 'idle'; }
-  c.routeVer++;
+  stopAfterBlock(c);
 }
 function unassign(r) {
   if (!r.car) return;
@@ -183,7 +180,7 @@ function actCharge(carId, depot, chargeTo = 90, reason) {
   if (c.next) unassign(c.next);
   if (c.job) unassign(c.job);
   let d = depotBy(depot), drive;
-  if (!d) { const b = bestDepotByTime(carNode(c), c.battery); if (!b) throw new Error(`${c.id} cannot reach a depot on ${r1(c.battery)}% by any known route.`); d = b.d; drive = b.st; }
+  if (!d) { const b = bestDepotFor(c); if (!b) throw new Error(`${c.id} cannot reach a depot on ${r1(c.battery)}% by any known route.`); d = b.d; drive = b.st; }
   c.depot = d; c.chargeTo = Math.max(10, Math.min(100, +chargeTo || 90));
   if (!sendTo(c, d.node, 'tocharge')) throw new Error(`No known route to ${d.name} right now; the car will retry in 30 s.`);
   if (c.path.length === 1) arrive(c);
