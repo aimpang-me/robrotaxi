@@ -49,7 +49,7 @@ body[data-live=true] .agent-id{display:grid}
 body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
 @media(max-width:1100px){#robroWhy{flex:none;max-height:360px}#robroHud{margin:12px 14px}}
 @media(min-width:861px) and (max-width:1100px){body[data-live=true] .center{grid-template-rows:auto minmax(420px,64vh)}}
-@media(max-width:860px){body[data-live=true] .center{grid-template-rows:auto auto}}
+@media(max-width:860px){body[data-live=true] main{grid-template-areas:"center" "fleet" "agent"}body[data-live=true] .center{grid-template-rows:auto auto}}
 @media(pointer:coarse),(max-width:560px){#robroHud .ctl{flex-wrap:wrap}#robroHud .ctl button{height:44px;flex:1 0 28%}#robroHud .sw,#robroWhy header button{min-height:44px}}
 `;
   document.head.append(css);
