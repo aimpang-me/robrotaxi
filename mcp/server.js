@@ -13,6 +13,7 @@ const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio
 const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
 const { Game, RANKED_SEEDS, leaderboard } = require('./game');
 const store = require('./store');
+const { createViewerStreams } = require('./viewer-stream');
 
 // In a container, hosted volumes mount as root. Started as root with ROBRO_RUN_AS_UID set, hand the data folders to that user and drop root.
 if (process.env.ROBRO_RUN_AS_UID && process.getuid && process.getuid() === 0) {
@@ -48,7 +49,8 @@ const say = (...a) => console.error('[robrotaxi]', ...a); // stdout belongs to t
 const games = new Map();
 const liveGames = () => [...games.values()].filter((g) => !g.over()).length;
 const clean = (x, n) => String(x).replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, n);
-const watchers = new Map(); // game id -> Set of SSE responses
+const watchers = new Map(); // game id -> viewer hub
+const viewerStreams = createViewerStreams(watchers, LIM.watchers);
 // watch links: 3D by default; base is the public address the client used (or ROBRO_PUBLIC_URL), else localhost
 const viewUrl = (g, base, view = '3d') => { const b = process.env.ROBRO_PUBLIC_URL || base || (VIEW_PORT ? `http://localhost:${VIEW_PORT}` : null); return b ? `${b.replace(/\/$/, '')}/view/${view}?game=${g.id}` : null; };
 function baseFrom(req) {
@@ -286,17 +288,7 @@ function handleView(req, res, url) {
   const m = /^\/live\/([\w-]+)\/stream$/.exec(p);
   if (m) {
     const g = games.get(m[1]); if (!g) return page(res, 404, 'text/plain', 'no such game');
-    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive', 'access-control-allow-origin': '*' });
-    let evFrom = 0;
-    const meta = { id: g.id, player: g.player, model: g.model, seed: g.seed, ranked: g.ranked, mode: g.mode };
-    const send = () => { const snap = g.live(evFrom); evFrom = snap.evTo; res.write(`data: ${JSON.stringify({ meta, snap, ctl: g.ctl })}\n\n`); };
-    if (!watchers.has(g.id)) watchers.set(g.id, new Set());
-    const total = [...watchers.values()].reduce((n, x) => n + x.size, 0);
-    if (total >= LIM.watchers) { res.write('event: full\ndata: {}\n\n'); return res.end(); }
-    const set = watchers.get(g.id); set.add(res); g.listeners.add(send); send();
-    const ka = setInterval(() => res.write(': ka\n\n'), 15000);
-    req.on('close', () => { set.delete(res); g.listeners.delete(send); clearInterval(ka); });
-    return;
+    return viewerStreams.subscribe(g, req, res);
   }
   const c = /^\/live\/([\w-]+)\/ctl$/.exec(p);
   if (c) { // viewer playback: pacing only. The sim is stepped identically at any speed, so scores do not change.
