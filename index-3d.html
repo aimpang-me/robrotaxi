@@ -1514,9 +1514,11 @@ let viewMode = 'tilt';
 const MAT = {};
 const GEO = {};
 
-function groundTexture() {
+// Quality-aware: the longest canvas side is capped by the tier (2048 High / 1024 Low), which keeps
+// the GPU copy at 16/4 MiB instead of the old fixed 4096x3923 canvas (~61 MiB).
+function groundTexture(maxDim = 2048) {
   // streets painted at true width onto a transparent texture laid over the land
-  const W = PLAYB.x1 - PLAYB.x0, H = PLAYB.y1 - PLAYB.y0, k = Math.min(4096 / W, 4096 / H);
+  const W = PLAYB.x1 - PLAYB.x0, H = PLAYB.y1 - PLAYB.y0, k = Math.min(maxDim / W, maxDim / H);
   const cv = document.createElement('canvas'); cv.width = Math.round(W * k); cv.height = Math.round(H * k);
   const g = cv.getContext('2d'); g.scale(k, k); g.translate(-PLAYB.x0, -PLAYB.y0);
   const line = (pts) => { g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); g.stroke(); };
@@ -1583,7 +1585,7 @@ function loadCybercab() {
   }, (err) => console.warn('Cybercab model did not load, keeping the simple cars', err));
 }
 /* ---------------- city art kit ---------------- */
-// Map-agnostic scene art. buildCityArt(layout) takes world-space (x, z) data:
+// Map-agnostic scene art. cityArtSteps(layout) takes world-space (x, z) data:
 //   buildings: [{ pts: [[x, z], ...], h, style: 'glass' | 'brick' | 'concrete' | 'stone' }]
 //   water:     [{ pts, banks: [[[x, z], ...], ...] }]   banks get a stone quay edge
 //   bridges:   [{ a: [x, z], b: [x, z], w }]
@@ -1595,7 +1597,7 @@ function loadCybercab() {
 // It adds textured buildings, animated water, swaying instanced trees and a sky, all on shared
 // materials and a handful of merged meshes. cityLayout() feeds it the current map; a new map
 // only needs a new layout function.
-const ART = { time: { value: 0 }, quality: null, pref: 'auto', sun: null, trees: [], roofUnits: null, waterMats: [], dt: [], slowWins: 0, last: 0 };
+const ART = { time: { value: 0 }, quality: null, pref: 'auto', prefResolved: false, artBuild: null, groundMax: 0, sun: null, trees: [], roofUnits: null, waterMats: [], dt: [], slowWins: 0, last: 0 };
 let FLOOR = 2.6, BAY = 3; const TILE = 8; // facade textures repeat every 8 bays x 8 floors
 const artRand = mulberry(20261021); // own stream so the sim's random numbers are untouched
 const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
@@ -1791,7 +1793,10 @@ function roofBoxFits(cx, cz, len, wid, ang, pts, clearance = 0.12) {
   return true;
 }
 
-function buildCityArt(L) {
+// One generator so the ~13.9k building extrusions can be time-sliced across frames by
+// pumpCityArt() instead of blocking the first paint; the body is the old buildCityArt body with
+// one yield per building, so RNG order and the finished scene are unchanged.
+function* cityArtSteps(L) {
   if (L.floor) FLOOR = L.floor; if (L.bay) BAY = L.bay;
   scene.add(skyDome());
   const flat = (pts, y, mat) => { const geo = new THREE.ShapeGeometry(new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z)))); geo.rotateX(-Math.PI / 2); const m = new THREE.Mesh(geo, mat); m.position.y = y; m.receiveShadow = true; scene.add(m); return m; };
@@ -1833,6 +1838,7 @@ function buildCityArt(L) {
       occupied.push([x, z, radius]);
       k++;
     }
+    yield; // one building per resume, so the caller can pump a slice per frame
   }
   for (const s of styles) {
     if (!walls[s].p.length) continue;
@@ -1886,6 +1892,19 @@ function buildCityArt(L) {
     im.castShadow = true; im.receiveShadow = true; im.userData.full = list.length; scene.add(im); ART.trees.push(im);
   }
 }
+// Progressive city-art build: one resume of the generator does one building. pumpCityArt() spends
+// at most `maxMs` per animation frame, so the map, cars and traffic are already interactive while
+// the rest of the city geometry extrudes; the finished scene is identical to the old one-shot build.
+function beginCityArt(L) { ART.artBuild = cityArtSteps(L); }
+function pumpCityArt(maxMs = 6) {
+  const it = ART.artBuild; if (!it) return true;
+  const until = performance.now() + maxMs; let n = 0;
+  for (;;) {
+    if (it.next().done) { ART.artBuild = null; if (ART.quality) applyCityArtQuality(); return true; }
+    if ((++n & 31) === 0 && performance.now() >= until) return false;
+  }
+}
+function cityArtFrame() { if (!pumpCityArt()) requestAnimationFrame(cityArtFrame); }
 const polyArea = (pts) => Math.abs(pts.reduce((a, p, i) => { const q = pts[(i + 1) % pts.length]; return a + p[0] * q[1] - q[0] * p[1]; }, 0) / 2);
 function inPoly(x, z, pts) { let ins = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, zi] = pts[i], [xj, zj] = pts[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) ins = !ins; } return ins; }
 function grassTexture() {
@@ -1895,19 +1914,56 @@ function grassTexture() {
   const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; return t;
 }
 
-/* quality: High = shadows, full pixel ratio, rooftop detail, all trees, detailed water.
-   Low = no shadows, pixel ratio 1, half the trees. Auto starts High and drops to Low when
-   frames run slow. */
-function setQuality(q, why) {
-  if (q === ART.quality) return;
-  ART.quality = q; const hi = q === 'high';
-  renderer.setPixelRatio(hi ? Math.min(2, devicePixelRatio) : 1); if (typeof resize3D === 'function') resize3D();
-  ART.sun.castShadow = hi;
+/* quality: High = shadows, full pixel ratio, rooftop detail, all trees, detailed water, a 2048
+   ground texture and 2048 shadow map. Low = no shadows, pixel ratio 1, half the trees, a 1024
+   ground texture. Auto starts High and drops to Low when frames run slow. */
+const groundMaxSize = (q) => (q === 'low' ? 1024 : 2048);
+const shadowMaxSize = (q) => (q === 'low' ? 1024 : 2048);
+// the graphics preference is resolved once, before the first ground texture and shadow map exist
+function resolveGfxPref() {
+  if (ART.prefResolved) return ART.pref;
+  ART.prefResolved = true;
+  const fromUrl = new URLSearchParams(location.search).get('q');
+  let p = fromUrl;
+  if (!p) { try { p = localStorage.getItem('robro.gfx'); } catch (e) { /* storage blocked */ } }
+  ART.pref = ['auto', 'high', 'low'].includes(p) ? p : 'auto';
+  return ART.pref;
+}
+const weakDevice = () => (navigator.hardwareConcurrency || 8) <= 4 || matchMedia('(pointer: coarse)').matches;
+function initialQuality() { const p = resolveGfxPref(); return p === 'low' || (p === 'auto' && weakDevice()) ? 'low' : 'high'; }
+// parts of the city art that follow the tier; also called when the progressive build finishes
+function applyCityArtQuality() {
+  const hi = ART.quality === 'high';
   if (ART.roofUnits) ART.roofUnits.visible = hi;
   for (const t of ART.trees) t.count = hi ? t.userData.full : Math.ceil(t.userData.full / 2);
   for (const m of ART.waterMats) { if (hi) m.defines.DETAIL = ''; else delete m.defines.DETAIL; m.needsUpdate = true; }
+}
+// swap the ground texture for the resolution the current tier can afford; the old one is released
+function ensureGroundTexture() {
+  if (!ground) return;
+  const max = groundMaxSize(ART.quality);
+  if (ART.groundMax === max) return;
+  const old = ground.material.map;
+  ground.material.map = groundTexture(max); ground.material.needsUpdate = true;
+  if (old) old.dispose();
+  ART.groundMax = max;
+}
+function applyQuality() {
+  const hi = ART.quality === 'high';
+  renderer.setPixelRatio(hi ? Math.min(2, devicePixelRatio) : 1); if (typeof resize3D === 'function') resize3D();
+  ART.sun.castShadow = hi;
+  const shadow = shadowMaxSize(ART.quality);
+  if (ART.sun.shadow.map && ART.sun.shadow.mapSize.x !== shadow) { ART.sun.shadow.map.dispose(); ART.sun.shadow.map = null; } // reallocated at the new size on next render
+  ART.sun.shadow.mapSize.set(shadow, shadow);
+  if (!hi && ART.sun.shadow.map) { ART.sun.shadow.map.dispose(); ART.sun.shadow.map = null; } // release it while shadows are off
+  ensureGroundTexture();
+  applyCityArtQuality();
   document.querySelectorAll('#gfxseg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.q === ART.pref)));
   const lbl = document.querySelector('#gfxseg [data-q="auto"]'); if (lbl) lbl.textContent = ART.pref === 'auto' ? `Auto · ${hi ? 'High' : 'Low'}` : 'Auto';
+}
+function setQuality(q, why) {
+  if (q === ART.quality) return;
+  ART.quality = q; applyQuality();
   if (why) toast(why);
 }
 function setGfxPref(p) {
@@ -1916,17 +1972,13 @@ function setGfxPref(p) {
   ART.quality = null; setQuality(p === 'low' ? 'low' : 'high');
 }
 function initQuality() {
-  const fromUrl = new URLSearchParams(location.search).get('q');
-  let p = fromUrl;
-  if (!p) { try { p = localStorage.getItem('robro.gfx'); } catch (e) { /* storage blocked */ } }
-  ART.pref = ['auto', 'high', 'low'].includes(p) ? p : 'auto';
+  resolveGfxPref();
   const wrap = $('mapwrap');
   if (wrap && !$('gfxseg')) {
     wrap.insertAdjacentHTML('beforeend', '<div class="seg gfxseg" id="gfxseg" role="group" aria-label="Graphics quality"><button data-q="auto">Auto</button><button data-q="high">High</button><button data-q="low">Low</button></div>');
     $('gfxseg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setGfxPref(b.dataset.q); });
   }
-  const weak = (navigator.hardwareConcurrency || 8) <= 4 || matchMedia('(pointer: coarse)').matches;
-  setQuality(ART.pref === 'low' || (ART.pref === 'auto' && weak) ? 'low' : 'high');
+  setQuality(initialQuality());
 }
 // called every frame: drives water and wind, and watches frame time for Auto
 function artTick(now) {
@@ -2184,7 +2236,8 @@ function init3D() {
   scene.add(new THREE.HemisphereLight(0xd6e4f0, 0x4a4238, 0.75));
   const sun = new THREE.DirectionalLight(0xfff1d6, 1.05); ART.sun = sun;
   sun.position.set(-380 * 8, 620 * 8, -260 * 8); sun.castShadow = true;
-  sun.shadow.mapSize.set(4096, 4096);
+  const shadowSize = shadowMaxSize(initialQuality()); // 2048 High / 1024 Low instead of a fixed 4096
+  sun.shadow.mapSize.set(shadowSize, shadowSize);
   Object.assign(sun.shadow.camera, { left: -SPAN3 * 0.6, right: SPAN3 * 0.6, top: SPAN3 * 0.6, bottom: -SPAN3 * 0.6, near: 1000, far: 12000 });
   sun.shadow.bias = -0.0008;
   scene.add(sun);
@@ -2192,11 +2245,12 @@ function init3D() {
   // the lake under everything, the shore and islands on it, the streets on top
   { const lake = new THREE.Mesh(new THREE.PlaneGeometry(60000, 60000), waterMaterial()); lake.name = 'base-lake'; lake.rotation.x = -Math.PI / 2; lake.position.y = -0.2; scene.add(lake); }
   const [gx, gz] = W3((PLAYB.x0 + PLAYB.x1) / 2, (PLAYB.y0 + PLAYB.y1) / 2);
-  ground = new THREE.Mesh(new THREE.PlaneGeometry((PLAYB.x1 - PLAYB.x0) * M3, (PLAYB.y1 - PLAYB.y0) * M3), new THREE.MeshStandardMaterial({ map: groundTexture(), transparent: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1 }));
+  ART.groundMax = groundMaxSize(initialQuality()); // the tier picked here is reused by initQuality()
+  ground = new THREE.Mesh(new THREE.PlaneGeometry((PLAYB.x1 - PLAYB.x0) * M3, (PLAYB.y1 - PLAYB.y0) * M3), new THREE.MeshStandardMaterial({ map: groundTexture(ART.groundMax), transparent: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1 }));
   ground.rotation.x = -Math.PI / 2; ground.position.set(gx, 0.3, gz); ground.receiveShadow = true; ground.renderOrder = 1; scene.add(ground);
 
-  // buildings, water, parks, trees and sky
-  const LAY = torontoLayout(); buildCityArt(LAY);
+  // buildings, water, parks, trees and sky — building geometry is streamed in after boot
+  const LAY = torontoLayout(); beginCityArt(LAY);
   { const mat = waterMaterial(); for (const w of LAY.rivers) { const shape = new THREE.Shape(w.pts.map(([x, z]) => new THREE.Vector2(x, -z))); for (const hole of w.holes || []) shape.holes.push(new THREE.Path(hole.map(([x, z]) => new THREE.Vector2(x, -z)))); const geo = new THREE.ShapeGeometry(shape); geo.rotateX(-Math.PI / 2); const m = new THREE.Mesh(geo, mat); m.name = 'inland-water'; m.position.y = 0.18; scene.add(m); } }
   drawServiceEdge();
   elevatedDecks();
@@ -2251,6 +2305,8 @@ function init3D() {
 
   setupPointer();
   new ResizeObserver(resize3D).observe(host); resize3D();
+  // boot finishes with a first time slice of the city; the rest streams in over the next frames
+  if (!pumpCityArt()) requestAnimationFrame(cityArtFrame);
 }
 function resize3D() {
   const host = $('three'); const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return;
