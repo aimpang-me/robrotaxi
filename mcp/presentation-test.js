@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const root = path.join(__dirname, '..');
 const graph = require('../map/toronto.graph.json');
 const pages = ['index.html', 'index-3d.html'].map((file) => fs.readFileSync(path.join(root, file), 'utf8'));
+const functionOf = (html, name) => html.match(new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}`))[0];
 const contexts = pages.map((html) => {
   for (const [, source] of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) new vm.Script(source);
   const context = vm.createContext({ MAPG: graph });
@@ -30,4 +31,39 @@ for (const context of contexts) {
   assert(insideService(250, 250), 'a city pickup is eligible');
   assert(!insideService(-100, -100), 'an exterior pickup is refused');
 }
-console.log('Presentation syntax, boundary parity, road clearance, marker clearance, and pickup eligibility passed.');
+for (const html of pages) {
+  const context = vm.createContext({});
+  vm.runInContext(functionOf(html, 'displayHeading'), context);
+  const { displayHeading } = context;
+  const after = (frames) => {
+    const record = {};
+    displayHeading(record, 179, 0, false);
+    for (let frame = 1; frame <= frames; frame++) displayHeading(record, -179, frame * 1000 / frames, false);
+    return record.heading;
+  };
+  assert(Math.abs(after(30) - after(60)) < 1e-9 && Math.abs(after(60) - after(144)) < 1e-9, 'heading damping depends on elapsed time, not frame count');
+  assert(after(60) > 179 && after(60) < 181, 'a turn across the angle wrap takes the short path');
+  const record = { heading: 20, headingAt: 0 };
+  assert.equal(displayHeading(record, 90, 16, true), 90, 'reduced motion uses the current heading immediately');
+  assert.equal(displayHeading(record, 120, 2000, false), 120, 'resuming after a long suspension snaps to the current heading');
+}
+const svgNode = () => ({ attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, classList: { toggle() {} } });
+for (const route of [[0], [0, 1]]) {
+  const car = { i: 0, state: 'idle', path: route, seg: 0, prog: 0, ang: 0, x: 12, y: 34, battery: 60, job: null };
+  const record = { heading: 170, headingAt: 0 };
+  for (const key of ['grp', 'num', 'body', 'lamp', 'ring', 'face', 'route', 'under']) record[key] = svgNode();
+  const context = vm.createContext({ S: { cars: [car], selected: null, hoverCar: null }, carEls: new Map([[car, record]]), nodes: [{ x: 100, y: 100 }], E: () => ({ oneway: false }), $: svgNode, UI: 1, LANE: 0.45, tagSize: 11, LAMP: {}, ROUTE_COL: {}, reduceMotion: false });
+  vm.runInContext(['carPos', 'displayHeading', 'renderMap'].map((name) => functionOf(pages[0], name)).join('\n'), context);
+  const before = JSON.stringify(car);
+  context.renderMap(100);
+  assert.equal(record.body.attrs.transform, 'rotate(170.0) scale(0.95)', 'stopped and zero-progress cars retain their last display heading');
+  assert.equal(JSON.stringify(car), before, 'rendering a stopped car leaves authoritative car fields unchanged');
+}
+const ribbonContext = vm.createContext({ MK: 1 });
+vm.runInContext(functionOf(pages[1], 'writeRibbon'), ribbonContext);
+const geometry = { attributes: { position: { array: new Float32Array(18) } }, setDrawRange(start, count) { this.count = count; } };
+ribbonContext.writeRibbon({ ribbon: { geometry }, max: 1 }, [[0, 0, 9.9], [100, 0, 9.9]], 100);
+for (let i = 1; i < 18; i += 3) assert(geometry.attributes.position.array[i] > 9.9, 'elevated route paint stays above the road deck');
+ribbonContext.writeRibbon({ ribbon: { geometry }, max: 1 }, [[0, 0, 0], [100, 0, 10]], 50);
+assert(Math.abs(geometry.attributes.position.array[4] - 6.2) < 1e-5, 'partially drawn route paint interpolates its endpoint height');
+console.log('Presentation syntax, boundary parity and clearance, heading timing and retention, render isolation, and elevated route paint passed.');

@@ -43,7 +43,13 @@
 #robroWhy .why{margin-top:3px;color:var(--paint-2)}#robroWhy .none{margin-top:3px;color:var(--muted)}#robroWhy .empty{padding:10px 0;color:var(--muted)}
 body[data-live=true] .fleet .cars{flex:1}
 body[data-live=true] button:disabled{cursor:not-allowed}
+body[data-live=true] #pause,body[data-live=true] [aria-label="Simulation speed"],body[data-live=true] .ctrls .switch,body[data-live=true] .tools,
+body[data-live=true] .agent .off-only,body[data-live=true] #tune,body[data-live=true] #connect,body[data-live=true] #handshake{display:none}
+body[data-live=true] .agent-id{display:grid}
+body[data-live=true] .center{grid-template-rows:auto minmax(0,1fr)}
 @media(max-width:1100px){#robroWhy{flex:none;max-height:360px}#robroHud{margin:12px 14px}}
+@media(min-width:861px) and (max-width:1100px){body[data-live=true] .center{grid-template-rows:auto minmax(420px,64vh)}}
+@media(max-width:860px){body[data-live=true] .center{grid-template-rows:auto auto}}
 @media(pointer:coarse),(max-width:560px){#robroHud .ctl{flex-wrap:wrap}#robroHud .ctl button{height:44px;flex:1 0 28%}#robroHud .sw,#robroWhy header button{min-height:44px}}
 `;
   document.head.append(css);
@@ -67,7 +73,7 @@ body[data-live=true] button:disabled{cursor:not-allowed}
   }
   drawCtl();
   const LOCK = 'Locked in a live model game: this would change the day the model is playing, so scores would stop being comparable. Playback speed and pause in the Fleet rail are free.';
-  const LOCKED_CONTROLS = '#connect, #agentAddr, .tool, #reseed, #seedIn, #clearInc, #rush, #randomInc, #pause, [data-speed], #wEff, #wBat, #wRr';
+  const LOCKED_CONTROLS = '#connect, #agentUrl, .tool, #reseed, #seedIn, #clearInc, #rush, #randomInc, #pause, [data-speed], #wEff, #wBat, #wRr';
   function lockViewerControls() {
     document.querySelectorAll(LOCKED_CONTROLS).forEach((el) => { el.disabled = true; el.title = LOCK; el.style.opacity = '.45'; });
   }
@@ -229,7 +235,6 @@ body[data-live=true] button:disabled{cursor:not-allowed}
     const sc = snap.score;
     if (!announced) {
       announced = true; document.title = `${meta.player} · ${meta.model} · RobroTaxi live`;
-      // the page's own controls would fork the local world from the server's, so they are switched off
       const set = (sel, text) => { const el = document.getElementById(sel); if (el) { if ('value' in el && el.tagName === 'INPUT') el.value = text; else el.textContent = text; } };
       set('seedIn', String(meta.seed));
       set('seedLabel', `Seed ${meta.seed} · about ${snap.rph} riders/hr · live from HQ`);

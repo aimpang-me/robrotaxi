@@ -1430,7 +1430,10 @@ function renderAvatars() {
       const wait = Math.max(0, S.t - r.t0), mood = moodOf(wait), N = nodes[r.from], k = stack.get(r.from) || 0, x = N.x + (12 + k * 26) * u, y = N.y - 14 * u - 26 * u; stack.set(r.from, k + 1); // riders at one spot line up
       avatar(g, x, y, f, mood, Math.min(1, wait / CANCEL_AFTER), MOOD_COL[mood], mood === 'angry' ? 'av-pulse' : '');
       live.set(r.id, { x, y, f, st: 'wait' });
-    } else if (r.status === 'riding' && r.car && r.car.sx != null) live.set(r.id, { x: r.car.sx - 16 * u, y: r.car.sy - 16 * u, f, st: 'ride' });
+    } else if (r.status === 'riding' && r.car) {
+      const pose = carEls.get(r.car);
+      if (pose?.sx != null) live.set(r.id, { x: pose.sx - 16 * u, y: pose.sy - 16 * u, f, st: 'ride' });
+    }
   }
   const gone = [...avSeen].filter(([id]) => !live.has(id)).map(([, s]) => s);
   if (gone.length <= 6) for (const s of gone) { // more at once is a world reset
@@ -1477,6 +1480,18 @@ function fitTags() {
   $('map').style.setProperty('--map-k', (1 / UI).toFixed(3));
 }
 addEventListener('resize', fitTags);
+function displayHeading(record, target, now, reduced) {
+  const dt = now - record.headingAt;
+  if (record.heading == null || reduced || dt > 500 || dt < 0) record.heading = target;
+  else {
+    let delta = target - record.heading;
+    while (delta > 180) delta -= 360;
+    while (delta < -180) delta += 360;
+    record.heading += delta * (1 - Math.exp(-dt / 100));
+  }
+  record.headingAt = now;
+  return record.heading;
+}
 function renderMap(now) {
   const anySel = !!S.selected;
   $('gRoutes').classList.toggle('dim', anySel);
@@ -1486,13 +1501,13 @@ function renderMap(now) {
     // drive on the right: offset from the centreline
     let ox = 0, oy = 0;
     if (c.seg < c.path.length - 1) { const e = E(c.path[c.seg], c.path[c.seg + 1]); const a = p.ang * Math.PI / 180, o = e && e.oneway ? 0 : LANE; ox = -Math.sin(a) * o; oy = Math.cos(a) * o; }
-    let ang = p.ang; let da = ang - c.ang; while (da > 180) da -= 360; while (da < -180) da += 360;
-    c.ang += da * 0.35; c.x = p.x; c.y = p.y;
+    const target = c.livePos || (c.seg < c.path.length - 1 && c.prog > 0) ? p.ang : r.heading ?? p.ang;
+    const heading = displayHeading(r, target, now, reduceMotion);
     r.grp.setAttribute('transform', `translate(${(p.x + ox).toFixed(2)} ${(p.y + oy).toFixed(2)}) scale(${UI.toFixed(4)})`);
-    c.sx = p.x + ox; c.sy = p.y + oy;
-    const crowd = S.cars.some((o) => o.i < c.i && o.sx != null && Math.abs(o.sx - c.sx) < tagSize * 2.4 * UI && Math.abs(o.sy - c.sy) < tagSize * 2.2 * UI);
+    r.sx = p.x + ox; r.sy = p.y + oy;
+    const crowd = S.cars.some((o) => { const q = carEls.get(o); return o.i < c.i && q.sx != null && Math.abs(q.sx - r.sx) < tagSize * 2.4 * UI && Math.abs(q.sy - r.sy) < tagSize * 2.2 * UI; });
     r.num.setAttribute('y', crowd ? (12 + tagSize).toFixed(1) : (-10).toFixed(1));
-    r.body.setAttribute('transform', `rotate(${c.ang.toFixed(1)}) scale(0.95)`);
+    r.body.setAttribute('transform', `rotate(${heading.toFixed(1)}) scale(0.95)`);
     r.lamp.setAttribute('fill', LAMP[c.state] || 'var(--paint-2)');
     r.ring.setAttribute('visibility', S.selected === c || S.hoverCar === c ? 'visible' : 'hidden');
     r.ring.setAttribute('stroke', c.state === 'stranded' ? 'var(--red)' : 'var(--yellow)');
@@ -1815,6 +1830,7 @@ function resetWorld(seed) {
   S.rph = 18 + Math.floor(rD() * 38); S.phase = rD() * 6.28;
   S.hazards = makeHazards();
   initCars(); recomputeTraffic();
+  for (const r of carEls.values()) { delete r.heading; delete r.headingAt; delete r.sx; delete r.sy; }
   feedEl.replaceChildren(); $('handshake').replaceChildren(); $('tune').open = true; setAgentUI(); select(null);
   $('seedIn').value = seed;
   $('seedLabel').textContent = `Seed ${seed} · about ${S.rph} riders/hr · ${S.hazards.filter((h) => h.t < 12 * 3600).length} hidden hazards by noon`;
