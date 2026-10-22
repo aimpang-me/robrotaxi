@@ -50,6 +50,26 @@ assert(!ART.carLights[0].visible && !ART.streetPools.visible && ART.facades[0].e
 ART.enabled = false; context.apply(night);
 assert.equal(ART.night, 0, 'off leaves the fixed daytime frame');
 
+{
+  let picked = 0;
+  class Geometry { rotateX() { return this; } }
+  class Mesh {
+    constructor(geometry, material) { this.geometry = geometry; this.material = material; this.position = { set() {} }; this.raycast = () => picked++; }
+  }
+  class Group {
+    constructor() { this.children = []; }
+    add(mesh) { this.children.push(mesh); }
+    traverse(fn) { fn(this); this.children.forEach(fn); }
+  }
+  const art = { enabled: true, night: 1, carLights: [] };
+  const fixture = vm.createContext({ THREE: { Group, Mesh, BoxGeometry: Geometry, PlaneGeometry: Geometry }, ART: art, MAT: {} });
+  vm.runInContext(html.match(/function attachTaxiLights\([\s\S]*?\n\}/)[0] + '\nthis.attach = attachTaxiLights;', fixture);
+  const lights = fixture.attach(new Group(), 4.445, 1.73, 0.85);
+  assert(lights.visible, 'a model loaded during a paused night immediately has lights');
+  lights.children.forEach(mesh => mesh.raycast());
+  assert.equal(picked, 0, 'decorative lamps and light pools leave taxi picking to the body');
+}
+
 process.env.ROBRO_NO_LOG = '1';
 const { Game } = require('./game');
 const options = { player: 'Environment check', model: 'fixture', seed: 1101, mode: 'scripted', shadow: false };

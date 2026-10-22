@@ -65,7 +65,7 @@
       let p = pools.get(model); if (p && p.capacity >= count) return p;
       const capacity = Math.max(32, 2 ** Math.ceil(Math.log2(Math.max(1, count))));
       const geos = p ? p.meshes.map((m) => m.geometry) : geometry(models[model]);
-      if (p) for (const m of p.meshes) H.scene.remove(m);
+      if (p) for (const m of p.meshes) { H.scene.remove(m); m.dispose(); }
       const meshes = geos.map((g, i) => {
         const m = new THREE.InstancedMesh(g, [painted, details, frontLamp, rearLamp][i], capacity);
         m.name = `traffic-${model}-${['paint', 'details', 'front-lamps', 'rear-lamps'][i]}`; m.frustumCulled = false;
