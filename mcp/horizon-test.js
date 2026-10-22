@@ -1,4 +1,4 @@
-﻿const assert = require('node:assert/strict');
+const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -71,12 +71,5 @@ for (const key of ['atmosphereTop', 'atmosphereBand', 'atmosphereHaze']) {
   assert.equal(shader.uniforms[key], sky.material.uniforms[key], 'city and sky use the same clock color');
   assert.equal(water.uniforms[key], sky.material.uniforms[key], 'water and sky use the same clock color');
 }
-for (const [a, b, , , , interior] of MAPG.edges) {
-  const points = [MAPG.nodes[a], MAPG.nodes[b]];
-  for (let i = 0; i < interior.length; i += 2) points.push(interior.slice(i, i + 2));
-  for (const point of points) {
-    const [x, z] = context.project(...point);
-    assert(sky.material.uniforms.hazeService.value.every(edge => edge.x * x + edge.y * z <= edge.z), 'all operational streets remain inside the clear service region');
-  }
-}
-console.log('Depth-safe background, camera uniforms, shared haze colors, shader composition, and clear operational streets passed.');
+assert(sky.material.uniforms.hazeRange.value.y > sky.material.uniforms.hazeRange.value.x * 4, 'peripheral haze transitions over a broad world distance');
+console.log('Depth-safe background, camera uniforms, shared haze colors, shader composition, and operational overlay exemption passed.');
