@@ -28,7 +28,7 @@ const color = () => ({ value: null, copy(v) { this.value = v.value; return this;
 const uniform = () => ({ value: color() });
 const water = { uniforms: Object.fromEntries(['deep', 'shallow', 'sky', 'sun', 'sunDir', 'sunlight'].map((k) => [k, uniform()])) };
 water.uniforms.sunDir.value.set = function (...v) { this.value = v; };
-const sky = { uniforms: Object.fromEntries(['top', 'horizon', 'below', 'sun', 'sunDir', 'sunlight', 'cloudCover', 'cloudPhase'].map((k) => [k, uniform()])) };
+const sky = { uniforms: Object.fromEntries(['atmosphereTop', 'atmosphereBand', 'atmosphereHaze', 'sun', 'sunDir', 'sunlight', 'cloudCover', 'cloudPhase'].map((k) => [k, uniform()])) };
 sky.uniforms.sunDir.value.set = function (...v) { this.value = v; };
 sky.uniforms.cloudPhase.value.set = function (...v) { this.value = v; };
 const ART = { enabled: true, sun: { position: { set(...v) { this.value = v; } }, color: color() }, hemi: { color: color(), groundColor: color() }, sky,
