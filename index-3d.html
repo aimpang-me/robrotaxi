@@ -1214,7 +1214,24 @@ const COL = {};
 ['--asphalt', '--asphalt-2', '--road', '--block', '--lot', '--line', '--paint', '--paint-2', '--muted', '--yellow', '--red', '--orange', '--green', '--blue', '--water', '--water-line', '--park', '--park-dot'].forEach((n) => (COL[n.slice(2)] = tok(n)));
 // world space is metres (1 sim unit = 10 m), centred on the play area; x east, z south
 const SCENE = (window.ROBRO_MAP || {}).scene || { land: [], water: [], parks: [], rail: [], minor: [], buildings: [], landmarks: [] };
-const PLAYB = (() => { const xs = MAPG.play.map((p) => p[0]), ys = MAPG.play.map((p) => p[1]); return { x0: Math.min(...xs) - 20, y0: Math.min(...ys) - 20, x1: Math.max(...xs) + 20, y1: Math.max(...ys) + 20 }; })();
+function serviceBoundary(play, clearance) {
+  const winding = Math.sign(play.reduce((a, p, i) => { const q = play[(i + 1) % play.length]; return a + p[0] * q[1] - q[0] * p[1]; }, 0));
+  const lines = play.map((p, i) => {
+    const q = play[(i + 1) % play.length], dx = q[0] - p[0], dy = q[1] - p[1], len = Math.hypot(dx, dy);
+    const x = -dy / len * winding, y = dx / len * winding;
+    return { x, y, d: x * p[0] + y * p[1] - clearance };
+  });
+  return lines.map((b, i) => {
+    const a = lines[(i + lines.length - 1) % lines.length], det = a.x * b.y - b.x * a.y;
+    return [(a.d * b.y - b.d * a.y) / det, (a.x * b.d - b.x * a.d) / det];
+  });
+}
+function insideService(x, y, ring = MAPG.play, margin = 0) {
+  const winding = Math.sign(ring.reduce((a, p, i) => { const q = ring[(i + 1) % ring.length]; return a + p[0] * q[1] - q[0] * p[1]; }, 0));
+  return ring.every((p, i) => { const q = ring[(i + 1) % ring.length], dx = q[0] - p[0], dy = q[1] - p[1]; return winding * (dx * (y - p[1]) - dy * (x - p[0])) >= margin * Math.hypot(dx, dy) - 1e-6; });
+}
+const SERVICE = serviceBoundary(MAPG.play, 14);
+const PLAYB = (() => { const xs = SERVICE.map((p) => p[0]), ys = SERVICE.map((p) => p[1]); return { x0: Math.min(...xs) - 8, y0: Math.min(...ys) - 8, x1: Math.max(...xs) + 8, y1: Math.max(...ys) + 8 }; })();
 const C3 = [(PLAYB.x0 + PLAYB.x1) / 2, (PLAYB.y0 + PLAYB.y1) / 2], M3 = 10;
 const W3 = (x, y) => [(x - C3[0]) * M3, (y - C3[1]) * M3]; // sim units -> world x,z in metres
 const SPAN3 = Math.max(PLAYB.x1 - PLAYB.x0, PLAYB.y1 - PLAYB.y0) * M3;
@@ -1260,6 +1277,17 @@ function groundTexture() {
   for (const dp of DEPOTS) { const N = nodes[dp.node]; g.fillStyle = COL.road; g.strokeStyle = COL.green; g.lineWidth = 0.25; g.beginPath(); g.arc(N.x, N.y, dp.hq ? 3 : 2.2, 0, 7); g.fill(); g.stroke(); }
   const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 8; tex.encoding = THREE.sRGBEncoding;
   return tex;
+}
+function drawServiceEdge() {
+  const path = (ring) => new THREE.Path(ring.map(([x, y]) => { const [wx, wz] = W3(x, y); return new THREE.Vector2(wx, -wz); }));
+  const outer = new THREE.Shape([[-30000, -30000], [30000, -30000], [30000, 30000], [-30000, 30000]].map(([x, y]) => new THREE.Vector2(x, y)));
+  outer.holes.push(path(SERVICE));
+  const band = new THREE.Shape(path(SERVICE).getPoints()); band.holes.push(path(serviceBoundary(MAPG.play, 13.3)));
+  for (const [shape, color, y] of [[outer, COL.asphalt, 0.4], [band, COL['paint-2'], 0.45]]) {
+    const geo = new THREE.ShapeGeometry(shape); geo.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 1, side: THREE.DoubleSide }));
+    mesh.position.y = y; mesh.receiveShadow = true; scene.add(mesh);
+  }
 }
 function makeLabelTexture(text, fg, bg) {
   const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const g = cv.getContext('2d');
@@ -1530,7 +1558,7 @@ function buildCityArt(L) {
   // trees: one instanced mesh per kind, shuffled so Low quality can draw an even subset
   const sway = swayMaterial();
   for (const kind of [0, 1]) {
-    const list = trees.filter((t) => (t.kind || 0) === kind);
+    const list = trees.filter((t) => (t.kind || 0) === kind && insideService(t.x / M3 + C3[0], t.z / M3 + C3[1], SERVICE, t.s * 2 / M3));
     for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(artRand() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
     if (!list.length) continue;
     const im = new THREE.InstancedMesh(treeGeometry(kind), sway, list.length), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), tint = new THREE.Color();
@@ -1605,7 +1633,7 @@ function torontoLayout() {
     : r < 0.55 ? 'brick' : r < 0.8 ? 'stone' : 'concrete';
   const buildings = [];
   for (const b of SCENE.buildings) {
-    const ring = bldRing(b); if (ring.length < 3) continue;
+    const ring = bldRing(b); if (ring.length < 3 || !ring.every(([x, y]) => insideService(x, y, SERVICE, 1))) continue;
     const mi = b.indexOf('m'), y0 = mi > 0 ? b[mi + 1] : 0;
     const h = Math.max(y0 + FLOOR, b[0]);
     // a rounded footprint keeps its shape; a long thin one is probably a canopy, keep it low
@@ -1790,6 +1818,7 @@ function init3D() {
   // buildings, water, parks, trees and sky
   const LAY = torontoLayout(); buildCityArt(LAY);
   { const mat = waterMaterial(); for (const w of LAY.rivers) { const geo = new THREE.ShapeGeometry(new THREE.Shape(w.pts.map(([x, z]) => new THREE.Vector2(x, -z)))); geo.rotateX(-Math.PI / 2); const m = new THREE.Mesh(geo, mat); m.position.y = 0.18; scene.add(m); } }
+  drawServiceEdge();
   elevatedDecks();
   // depots: chargers
   const postGeo = new THREE.BoxGeometry(3, 9, 3), postMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(COL.green), emissive: new THREE.Color(COL.green), emissiveIntensity: 0.25 });
@@ -2046,6 +2075,7 @@ function setupPointer() {
     const { car, p } = groundPoint(ev);
     if (S.tool === 'none') { select(car ?? null); if (!car && viewMode === 'follow') setView('tilt'); return; }
     if (!p) return;
+    if (!insideService(p.x, p.y)) { toast('Outside the service area. Choose a point inside the city.'); return; }
     if (S.tool === 'crash' || S.tool === 'jam') { const e = nearestEdge(p); if (e) { addIncident(S.tool, e); showHover(null); } return; }
     let best = 0, bd = 1e9; for (const n of nodes) { if (!streetNode[n.id]) continue; const d = Math.hypot(n.x - p.x, n.y - p.y); if (d < bd) { bd = d; best = n.id; } }
     if (S.rideDraft == null) { S.rideDraft = best; renderPins(); $('hint').textContent = `Pickup at ${corner(best)}. Now click your destination.`; return; }

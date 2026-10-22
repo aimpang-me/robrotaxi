@@ -223,7 +223,8 @@ main {
 .rail { stroke: var(--line); stroke-width: 1.5px; stroke-dasharray: 5 3; fill: none; vector-effect: non-scaling-stroke; }
 .minor { stroke: var(--road); stroke-opacity: .55; stroke-width: .55; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .outside { stroke: var(--road); stroke-opacity: .5; stroke-width: 1.1; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.playarea { fill: none; stroke: var(--paint); stroke-opacity: .14; stroke-width: 1.5px; stroke-dasharray: 2 6; vector-effect: non-scaling-stroke; pointer-events: none; }
+.service-matte { fill: var(--asphalt); fill-rule: evenodd; pointer-events: none; }
+.service-edge { fill: none; stroke: var(--paint-2); stroke-opacity: .65; stroke-width: 1.5px; stroke-dasharray: 10 6; vector-effect: non-scaling-stroke; pointer-events: none; }
 .road-case { stroke: #121212; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .road { stroke: var(--road); stroke-linecap: round; stroke-linejoin: round; fill: none; }
 .road.xway { stroke: #262624; }
@@ -1214,8 +1215,25 @@ const flatD = (f, close) => { let d = ''; for (let i = 0; i < f.length; i += 2) 
 // buildings: integer metres, first point absolute then deltas (map/FORMAT.md)
 function bldRing(b) { const pts = []; let x = 0, y = 0; for (let i = 2; i < b.length && typeof b[i] === 'number'; i += 2) { x += b[i]; y += b[i + 1]; pts.push([x / 10, y / 10]); } return pts; }
 const ROAD_W = (e) => e.motorway ? (e.oneway ? 1.4 : 2.4) : e.kmh >= 50 ? 1.8 : e.kmh >= 40 ? 1.4 : 1.0;   // units (10 m) of carriageway
+function serviceBoundary(play, clearance) {
+  const winding = Math.sign(play.reduce((a, p, i) => { const q = play[(i + 1) % play.length]; return a + p[0] * q[1] - q[0] * p[1]; }, 0));
+  const lines = play.map((p, i) => {
+    const q = play[(i + 1) % play.length], dx = q[0] - p[0], dy = q[1] - p[1], len = Math.hypot(dx, dy);
+    const x = -dy / len * winding, y = dx / len * winding;
+    return { x, y, d: x * p[0] + y * p[1] - clearance };
+  });
+  return lines.map((b, i) => {
+    const a = lines[(i + lines.length - 1) % lines.length], det = a.x * b.y - b.x * a.y;
+    return [(a.d * b.y - b.d * a.y) / det, (a.x * b.d - b.x * a.d) / det];
+  });
+}
+function insideService(x, y, ring = MAPG.play, margin = 0) {
+  const winding = Math.sign(ring.reduce((a, p, i) => { const q = ring[(i + 1) % ring.length]; return a + p[0] * q[1] - q[0] * p[1]; }, 0));
+  return ring.every((p, i) => { const q = ring[(i + 1) % ring.length], dx = q[0] - p[0], dy = q[1] - p[1]; return winding * (dx * (y - p[1]) - dy * (x - p[0])) >= margin * Math.hypot(dx, dy) - 1e-6; });
+}
+const SERVICE = serviceBoundary(MAPG.play, 14);
 // the view: the play area plus a margin; wheel or pinch zooms, drag pans
-const PLAYB = (() => { const xs = MAPG.play.map((p) => p[0]), ys = MAPG.play.map((p) => p[1]); return { x0: Math.min(...xs) - 8, y0: Math.min(...ys) - 8, x1: Math.max(...xs) + 8, y1: Math.max(...ys) + 8 }; })();
+const PLAYB = (() => { const xs = SERVICE.map((p) => p[0]), ys = SERVICE.map((p) => p[1]); return { x0: Math.min(...xs) - 8, y0: Math.min(...ys) - 8, x1: Math.max(...xs) + 8, y1: Math.max(...ys) + 8 }; })();
 const VB = { x: PLAYB.x0, y: PLAYB.y0, w: PLAYB.x1 - PLAYB.x0, h: PLAYB.y1 - PLAYB.y0 };
 const VB_HOME = { ...VB };
 let UI = VB.w / 980;       // map units per screen-ish pixel of the old 980-wide map; markers scale with it
@@ -1266,8 +1284,6 @@ function drawBase() {
   el('path', { class: 'rail', d: S0.rail.map((f) => flatD(f)).join('') }, g);
   el('path', { class: 'minor', d: S0.minor.filter((m) => m[0] === 0).map((m) => flatD(m.slice(1))).join('') }, g);
   el('path', { class: 'outside', d: S0.minor.filter((m) => m[0] > 0).map((m) => flatD(m.slice(1))).join('') }, g);
-  // the play area: streets outside it are drawn but not driven
-  el('path', { class: 'playarea', d: ptsD(MAPG.play) + 'Z' }, g);
   // roads by width: casing then surface, expressways on top of the streets they cross
   const byW = new Map();
   for (const e of edges) { const k = (e.elevated || e.motorway ? 'm' : 's') + ROAD_W(e); if (!byW.has(k)) byW.set(k, []); byW.get(k).push(e); }
@@ -1279,6 +1295,8 @@ function drawBase() {
   const tiers = [[0, 20], [20, 60], [60, 150], [150, 1000]];
   tiers.forEach(([lo, hi], i) => el('path', { class: 'bld t' + i, d: S0.buildings.filter((b) => b[0] >= lo && b[0] < hi).map((b) => ptsD(bldRing(b)) + 'Z').join('') }, g));
   for (const L of S0.landmarks) if (L.poly.length) el('path', { class: 'bld lm', d: flatD(L.poly, true) }, g);
+  el('path', { class: 'service-matte', d: `M-10000 -10000H10000V10000H-10000Z${ptsD(SERVICE)}Z` }, g);
+  el('path', { class: 'service-edge', d: ptsD(SERVICE) + 'Z' }, g);
   // labels: district names, main streets, landmarks; sized in screen pixels via --ui
   const lg = $('gLabels');
   const label = (txt, x, y, cls, rot) => { const t = el('text', { class: cls, 'data-at': `${x.toFixed(1)} ${y.toFixed(1)}`, x: 0, y: 0, 'text-anchor': 'middle' }, lg); if (rot != null) t.dataset.rot = rot; t.textContent = txt; return t; };
@@ -1749,6 +1767,7 @@ $('map').addEventListener('click', (ev) => {
   if (S.tool !== 'ride') { if (S.tool === 'none') select(null); return; }
   const svg = $('map'); const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
   const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  if (!insideService(p.x, p.y)) { toast('Outside the service area. Choose a point inside the city.'); return; }
   let best = 0, bd = 1e9; for (const n of nodes) { if (!streetNode[n.id]) continue; const d = Math.hypot(n.x - p.x, n.y - p.y); if (d < bd) { bd = d; best = n.id; } }
   if (S.rideDraft == null) { S.rideDraft = best; $('hint').textContent = `Pickup at ${corner(best)}. Now click your destination.`; return; }
   if (best === S.rideDraft) { toast('Pick a destination at least a block away'); return; }
